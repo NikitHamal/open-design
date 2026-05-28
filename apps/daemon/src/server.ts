@@ -4918,7 +4918,11 @@ export async function startServer({
 
   const analyticsService = createAnalyticsService({ dataDir: RUNTIME_DATA_DIR });
   const design = {
-    runs: createChatRunService({ createSseResponse, createSseErrorPayload }),
+    runs: createChatRunService({
+      createSseResponse,
+      createSseErrorPayload,
+      runsLogDir: path.join(RUNTIME_DATA_DIR, 'runs'),
+    }),
     analytics: analyticsService,
     getAppVersion: () => cachedAppVersion?.version ?? '0.0.0',
     readAnalyticsContext,
@@ -12270,6 +12274,75 @@ export async function startServer({
         if (renderedQuery.length > 0) meta.message = renderedQuery;
       }
     }
+    // MCP / SDK callers POST /api/runs with just a projectId — no
+    // conversationId, no pre-created assistantMessageId — because they
+    // don't know about OD's chat-row lifecycle. The web flow
+    // (POST /api/chat) on the other hand creates both client-side and
+    // passes them in. Without binding the run to a conversation and
+    // pre-pinning an assistant message row, the OD studio page for
+    // the project shows an empty chat panel — the user has no way to
+    // see what the outer agent asked or what the inner agent replied,
+    // even though the run finished and produced files.
+    //
+    // Fall back here: pick the project's default conversation (the
+    // one create_project seeded), write a user message with the
+    // prompt as content, and synthesize an assistantMessageId so the
+    // pin helper below will insert the empty assistant row. From that
+    // point on, the existing appendMessageAgentEvent path accumulates
+    // every text_delta into the assistant row's content — same as web
+    // chat.
+    if (
+      typeof meta.projectId === 'string' &&
+      meta.projectId &&
+      (typeof meta.conversationId !== 'string' || !meta.conversationId)
+    ) {
+      try {
+        const convs = listConversations(db, meta.projectId);
+        const defaultConv = Array.isArray(convs) && convs.length > 0 ? convs[0] : null;
+        if (defaultConv && typeof defaultConv.id === 'string' && defaultConv.id) {
+          meta.conversationId = defaultConv.id;
+          if (typeof meta.assistantMessageId !== 'string' || !meta.assistantMessageId) {
+            meta.assistantMessageId = randomUUID();
+          }
+          const promptForUserMessage =
+            typeof meta.message === 'string' && meta.message.trim().length > 0
+              ? meta.message
+              : null;
+          if (promptForUserMessage) {
+            upsertMessage(db, defaultConv.id, {
+              id: randomUUID(),
+              role: 'user',
+              content: promptForUserMessage,
+              startedAt: Date.now(),
+              endedAt: Date.now(),
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('[runs] mcp conversation fallback failed', err);
+      }
+    }
+    // MCP / SDK callers may omit agentId. Resolve it from the saved
+    // app-config agent (the user's configured default) or the first
+    // available CLI so the run does not immediately fail with
+    // "unknown agent: undefined" inside startChatRun.
+    if (typeof meta.agentId !== 'string' || !meta.agentId) {
+      try {
+        const appCfg = await readAppConfig(RUNTIME_DATA_DIR);
+        const cfgAgent = typeof appCfg.agentId === 'string' && appCfg.agentId
+          ? appCfg.agentId
+          : null;
+        if (cfgAgent) {
+          meta.agentId = cfgAgent;
+        } else {
+          const agents = await detectAgents(appCfg.agentCliEnv ?? {}).catch(() => []);
+          const firstAvailable = agents.find((a) => a.available)?.id ?? null;
+          if (firstAvailable) meta.agentId = firstAvailable;
+        }
+      } catch (err) {
+        console.warn('[runs] agent id fallback failed', err);
+      }
+    }
     const run = design.runs.create(meta);
     try {
       pinAssistantMessageOnRunCreate(db, run);
@@ -12300,6 +12373,12 @@ export async function startServer({
     /** @type {import('@open-design/contracts').ChatRunCreateResponse} */
     const body = {
       runId: run.id,
+      // Surface the bound conversation/message so MCP / SDK callers
+      // who did not provide them get back the daemon-resolved values
+      // (used for building studio deep links and threading chat
+      // history). Always nullable so the contract stays additive.
+      conversationId: run.conversationId ?? null,
+      assistantMessageId: run.assistantMessageId ?? null,
       ...(resolvedSnapshot?.ok
         ? {
             appliedPluginSnapshotId: resolvedSnapshot.snapshotId,

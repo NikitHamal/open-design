@@ -8,6 +8,7 @@ import { SUGGESTED_MODELS_BY_PROTOCOL } from '../state/apiProtocols';
 import { KNOWN_PROVIDERS } from '../state/config';
 import { mergeProviderModelOptions, providerModelsCacheKey } from './SettingsDialog';
 import { apiProtocolLabel } from '../utils/apiProtocol';
+import { fetchProviderModels } from '../providers/provider-models';
 import { isMacPlatform } from '../utils/platform';
 
 interface Props {
@@ -51,6 +52,7 @@ export function AvatarMenu({
 }: Props) {
   const t = useT();
   const [open, setOpen] = useState(false);
+  const [discoveredProviderModels, setDiscoveredProviderModels] = useState<Record<string, ProviderModelOption[]>>({});
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
@@ -102,7 +104,40 @@ export function AvatarMenu({
     config.apiKey ?? '',
     config.apiVersion ?? '',
   );
-  const fetchedByokModels = providerModelsCache?.[byokProviderModelsKey] ?? [];
+  const fetchedByokModels = providerModelsCache?.[byokProviderModelsKey] ?? discoveredProviderModels[byokProviderModelsKey] ?? [];
+
+  useEffect(() => {
+    if (!open || config.mode !== 'api') return;
+    if (fetchedByokModels.length > 0) return;
+    if (apiProtocol === 'azure' || apiProtocol === 'ollama') return;
+    const baseUrl = config.baseUrl?.trim() ?? '';
+    const apiKey = config.apiKey?.trim() ?? '';
+    if (!baseUrl || !apiKey) return;
+    let cancelled = false;
+    void fetchProviderModels({
+      protocol: apiProtocol,
+      baseUrl,
+      apiKey,
+    }).then((result) => {
+      if (cancelled || !result.ok || !result.models?.length) return;
+      setDiscoveredProviderModels((current) => ({
+        ...current,
+        [byokProviderModelsKey]: result.models ?? [],
+      }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    open,
+    config.mode,
+    apiProtocol,
+    config.baseUrl,
+    config.apiKey,
+    byokProviderModelsKey,
+    fetchedByokModels.length,
+  ]);
+
   const byokModelOptions = mergeProviderModelOptions(
     fetchedByokModels,
     SUGGESTED_MODELS_BY_PROTOCOL[apiProtocol] ?? [],

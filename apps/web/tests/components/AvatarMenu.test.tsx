@@ -72,6 +72,48 @@ const byokModelsCache: Record<string, ProviderModelOption[]> = {
 
 describe('AvatarMenu', () => {
 
+  it('fetches BYOK models on demand in project detail when no shared catalog is present', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input.toString();
+      if (url === '/api/provider/models') {
+        return new Response(JSON.stringify({
+          ok: true,
+          kind: 'success',
+          latencyMs: 12,
+          models: [
+            { id: 'gpt-4o', label: 'gpt-4o' },
+            { id: 'gpt-5.5', label: 'gpt-5.5' },
+          ],
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <I18nProvider>
+        <AvatarMenu
+          config={{ ...byokConfig, model: 'gpt-4o' }}
+          agents={agents}
+          daemonLive
+          onModeChange={vi.fn()}
+          onAgentChange={vi.fn()}
+          onAgentModelChange={vi.fn()}
+          onApiModelChange={vi.fn()}
+          onOpenSettings={vi.fn()}
+          onRefreshAgents={vi.fn()}
+          providerModelsCache={{}}
+        />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Account & settings' }));
+    await screen.findByRole('combobox', { name: 'Model' });
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+  });
+
   it('lets project detail BYOK mode search and switch models from the shared provider catalog', async () => {
     const onApiModelChange = vi.fn();
     render(
@@ -100,7 +142,9 @@ describe('AvatarMenu', () => {
     const search = within(popover).getByTestId('avatar-byok-model-search');
     fireEvent.change(search, { target: { value: 'image' } });
 
-    fireEvent.click(within(popover).getByRole('option', { name: 'gpt-image-2' }));
+    const option = within(popover).getByRole('option', { name: 'gpt-image-2' });
+    fireEvent.mouseDown(option);
+    fireEvent.click(option);
     expect(onApiModelChange).toHaveBeenCalledWith('gpt-image-2');
   });
 
@@ -178,5 +222,35 @@ describe('AvatarMenu', () => {
 
     expect(within(popover).getByRole('option', { name: 'deepseek-v4-flash' })).toBeTruthy();
     expect(within(popover).queryByRole('option', { name: 'gpt-5.4-mini' })).toBeNull();
+  });
+
+  it('keeps the project-detail menu open long enough for Local CLI model clicks to apply', async () => {
+    const onAgentModelChange = vi.fn();
+    render(
+      <I18nProvider>
+        <AvatarMenu
+          config={daemonConfig}
+          agents={agents}
+          daemonLive
+          onModeChange={vi.fn()}
+          onAgentChange={vi.fn()}
+          onAgentModelChange={onAgentModelChange}
+          onApiModelChange={vi.fn()}
+          onOpenSettings={vi.fn()}
+          providerModelsCache={{}}
+          onRefreshAgents={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Account & settings' }));
+    const modelCombobox = await screen.findByRole('combobox', { name: 'Model' });
+    fireEvent.click(modelCombobox);
+    const popover = await screen.findByTestId('avatar-model-popover');
+    const option = within(popover).getByRole('option', { name: 'deepseek-v4-flash' });
+    fireEvent.mouseDown(option);
+    fireEvent.click(option);
+
+    expect(onAgentModelChange).toHaveBeenCalledWith('codex', { model: 'deepseek-v4-flash' });
   });
 });

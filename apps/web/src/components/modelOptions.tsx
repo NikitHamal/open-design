@@ -91,6 +91,7 @@ export const SearchableModelSelect = forwardRef<
   const [query, setQuery] = useState('');
   const [popoverStyle, setPopoverStyle] = useState<({ left: number; width: number; maxHeight: number } & ({ top: number; bottom?: never } | { bottom: number; top?: never })) | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const listboxId = useMemo(
@@ -144,7 +145,9 @@ export const SearchableModelSelect = forwardRef<
   useLayoutEffect(() => {
     if (!open) return;
     const updatePosition = () => {
-      const rect = wrapRef.current?.getBoundingClientRect();
+      const rect =
+        buttonRef.current?.getBoundingClientRect() ??
+        wrapRef.current?.getBoundingClientRect();
       if (!rect) return;
       const viewportWidth = typeof window === 'undefined' ? rect.width : window.innerWidth;
       const viewportHeight = typeof window === 'undefined' ? rect.height : window.innerHeight;
@@ -197,7 +200,11 @@ export const SearchableModelSelect = forwardRef<
     <div className={`model-select-searchable${open ? ' is-open' : ''}`} ref={wrapRef}>
       <button
         {...buttonProps}
-        ref={ref}
+        ref={(node) => {
+          buttonRef.current = node;
+          if (typeof ref === 'function') ref(node);
+          else if (ref) ref.current = node;
+        }}
         type="button"
         role="combobox"
         aria-expanded={open}
@@ -218,6 +225,8 @@ export const SearchableModelSelect = forwardRef<
               className="model-select-searchable__popover"
               role="presentation"
               data-testid={popoverTestId}
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
               style={{
                 position: 'fixed',
                 top: popoverStyle.top != null ? `${popoverStyle.top}px` : 'auto',

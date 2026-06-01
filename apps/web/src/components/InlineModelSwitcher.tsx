@@ -30,6 +30,7 @@ import {
   notifyAmrLoginStatusChanged,
 } from './amrLoginPolling';
 import { normalizeAgentModelChoice } from './agentModelSelection';
+import { fetchProviderModels } from '../providers/provider-models';
 import { SearchableModelSelect } from './modelOptions';
 
 interface Props {
@@ -116,6 +117,7 @@ export function InlineModelSwitcher({
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [amrStatus, setAmrStatus] = useState<VelaLoginStatus | null>(null);
+  const [discoveredProviderModels, setDiscoveredProviderModels] = useState<Record<string, ProviderModelOption[]>>({});
   const [amrLoginPending, setAmrLoginPending] = useState(false);
   const [amrLoginError, setAmrLoginError] = useState(false);
   const [amrReminderSeen, setAmrReminderSeen] = useState(readAmrReminderSeen);
@@ -367,7 +369,7 @@ export function InlineModelSwitcher({
       ) ?? KNOWN_PROVIDERS.find((p) => p.protocol === apiProtocol),
     [apiProtocol, config.apiProviderBaseUrl],
   );
-  const fetchedProviderModels = providerModelsCache?.[providerModelsInputKey] ?? [];
+  const fetchedProviderModels = providerModelsCache?.[providerModelsInputKey] ?? discoveredProviderModels[providerModelsInputKey] ?? [];
   const apiModelOptions = useMemo(() => {
     const discovered = fetchedProviderModels.map((model) => model.id);
     const staticOptions = providerForProtocol?.models ?? [];

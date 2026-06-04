@@ -445,10 +445,14 @@ import {
   updateProject,
   updateRoutine,
   updateRoutineRun,
+  clearAgentSession,
+  updateAgentSessionStableHash,
+  upsertAgentSession,
   upsertDeployment,
   upsertMessage,
   upsertPreviewComment,
 } from './db.js';
+import { resolveAgentResumeContext, isClaudeResumeFailure, hashStableInstructions, computeIncludeStable } from './agent-session-resume.js';
 import {
   createLiveArtifact,
   deleteLiveArtifact,
@@ -11718,18 +11722,56 @@ export async function startServer({
       research,
       message,
     );
+    // Resume-capable adapters (today: Claude) continue their own CLI
+    // session so they keep working memory across turns. Decide once per
+    // run; reuse for the prompt-composition skipTranscript choice, the
+    // buildArgs flags, and the create-turn persistence below.
+    const agentResumeCtx =
+      def.resumesSessionViaCli === true && run.conversationId
+        ? resolveAgentResumeContext(db, {
+            conversationId: run.conversationId,
+            agentId: def.id,
+          })
+        : { resumeSessionId: null as string | null, newSessionId: undefined as string | undefined, isResuming: false, storedStablePromptHash: null as string | null };
     const userRequestPrompt = composeChatUserRequestForAgent(
       message,
       currentPrompt,
-      { skipTranscript: def.resumesSessionViaCli === true },
+      // Only trim to the latest turn when we are actually resuming an
+      // existing session. A create turn still sends the full transcript so
+      // a brand-new session (incl. first Claude turn after another agent)
+      // is seeded with prior context.
+      { skipTranscript: def.resumesSessionViaCli === true && agentResumeCtx.isResuming },
     );
-    const clientInstructionPrompt = [researchCommandContract, runContextPrompt, systemPrompt]
+    // The stable instruction slice (daemon prompt + tool contract + system
+    // prompt = design system / skills / memory) is identical across turns of
+    // a conversation in the common case. A resumed Claude session already
+    // holds it, so on resume turns we skip it unless it changed since the
+    // session was seeded — keyed by a hash stored on agent_sessions. Create
+    // turns and changed-hash turns send the full block (byte-identical to the
+    // previous behavior); non-Claude agents have isResuming === false and so
+    // always send the full block.
+    const stableInstructionFingerprint = [daemonSystemPrompt, runtimeToolPrompt, systemPrompt]
+      .map((part) => (typeof part === 'string' ? part.trim() : ''))
+      .join('\n\n---\n\n');
+    const currentStableHash = hashStableInstructions(stableInstructionFingerprint);
+    // `runtimeToolPrompt` is part of the fingerprint and varies only when the
+    // tool-token grant's presence flips between turns (rare cwd/projectId edge
+    // cases); any such change correctly forces a full re-send that turn.
+    const includeStableInstructions = computeIncludeStable(
+      agentResumeCtx.isResuming,
+      agentResumeCtx.storedStablePromptHash,
+      currentStableHash,
+    );
+    const clientInstructionParts = includeStableInstructions
+      ? [researchCommandContract, runContextPrompt, systemPrompt]
+      : [researchCommandContract, runContextPrompt];
+    const clientInstructionPrompt = clientInstructionParts
       .map((part) => (typeof part === 'string' ? part.trim() : ''))
       .filter(Boolean)
       .join('\n\n---\n\n');
     const instructionPrompt = composeLiveInstructionPrompt({
-      daemonSystemPrompt,
-      runtimeToolPrompt,
+      daemonSystemPrompt: includeStableInstructions ? daemonSystemPrompt : '',
+      runtimeToolPrompt: includeStableInstructions ? runtimeToolPrompt : '',
       clientSystemPrompt: clientInstructionPrompt,
       finalPromptOverride: codexImagegenOverride,
     });
@@ -12309,9 +12351,14 @@ export async function startServer({
       safeImages,
       extraAllowedDirs,
       agentOptions,
-      { cwd: effectiveCwd, hasPriorAssistantTurn, agentLogFilePath },
+      {
+        cwd: effectiveCwd,
+        hasPriorAssistantTurn,
+        agentLogFilePath,
+        resumeSessionId: agentResumeCtx.resumeSessionId,
+        newSessionId: agentResumeCtx.newSessionId,
+      },
     );
-
     // Second-pass budget check that knows about the Windows `.cmd` shim
     // wrap. The pre-buildArgs `checkPromptArgvBudget` only looks at the
     // raw composed prompt; on Windows an npm-installed adapter resolves
@@ -12365,6 +12412,27 @@ export async function startServer({
         ),
       );
       return design.runs.finish(run, 'failed', 1, null);
+    }
+
+    let persistDeliveredAgentSessionState = () => {};
+    if (def.resumesSessionViaCli === true && run.conversationId) {
+      let persisted = false;
+      persistDeliveredAgentSessionState = () => {
+        if (persisted) return;
+        persisted = true;
+        if (!agentResumeCtx.isResuming && agentResumeCtx.newSessionId) {
+          upsertAgentSession(db, {
+            conversationId: run.conversationId,
+            agentId: def.id,
+            sessionId: agentResumeCtx.newSessionId,
+            stablePromptHash: currentStableHash,
+          });
+          return;
+        }
+        if (agentResumeCtx.isResuming && includeStableInstructions) {
+          updateAgentSessionStableHash(db, run.conversationId, def.id, currentStableHash);
+        }
+      };
     }
 
     // `runStartTimeMs` is consumed by the run-end artifact-manifest
@@ -13401,6 +13469,26 @@ export async function startServer({
           return finishWithRetryDecision('failed', code ?? 1, signal ?? null);
         }
       }
+      if (
+        code !== 0 &&
+        !run.cancelRequested &&
+        def.resumesSessionViaCli === true &&
+        agentResumeCtx.isResuming &&
+        run.conversationId &&
+        isClaudeResumeFailure(`${agentStderrTail}\n${agentStdoutTail}`)
+      ) {
+        // The stored session id no longer resolves (pruned / machine moved
+        // / ~/.claude cleared). Drop it so the next turn starts a fresh
+        // session seeded with the full transcript, and surface a retryable
+        // error rather than a confusing hard failure.
+        clearAgentSession(db, run.conversationId, def.id);
+        send('error', createSseErrorPayload(
+          'AGENT_EXECUTION_FAILED',
+          'The previous Claude session could not be resumed (it may have expired). Resend your message to continue with a fresh session.',
+          { retryable: true },
+        ));
+        return design.runs.finish(run, 'failed', code ?? 1, signal ?? null);
+      }
       // Empty-output guard: a clean `code === 0` exit with no visible
       // output means the run silently finished without producing anything.
       // Surface an explicit failure so the chat shows a clear reason.
@@ -13659,6 +13747,9 @@ export async function startServer({
       }
       for (const chunk of plaintextStdoutBuffer) {
         send('stdout', { chunk });
+      }
+      if (status === 'succeeded') {
+        persistDeliveredAgentSessionState();
       }
       finishWithRetryDecision(status, code, signal);
       } finally {

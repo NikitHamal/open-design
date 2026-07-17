@@ -3596,9 +3596,14 @@ export function SettingsDialog({
     // (AMR routes through ACP `session/set_model` and validates against
     // a live catalog). Undefined === allow, matching today's UX.
     const allowCustomModel = selected.supportsCustomModel !== false;
+    const explicitCustomMode = agentCustomModelIds.has(selected.id);
     const configuredModel =
       typeof effectiveChoice.model === 'string' && effectiveChoice.model
         ? effectiveChoice.model
+        : null;
+    const customModelDraft =
+      explicitCustomMode && typeof choice.model === 'string'
+        ? choice.model
         : null;
     const setChoice = (
       next: { model?: string; reasoning?: string },
@@ -3614,12 +3619,13 @@ export function SettingsDialog({
         };
       });
     };
-    const modelValue =
+    const fallbackModelValue =
       selected.id === 'amr' &&
       configuredModel &&
       !knownModelIds.includes(configuredModel)
         ? defaultAgentModelId(selected) ?? ''
         : configuredModel ?? defaultAgentModelId(selected) ?? '';
+    const modelValue = customModelDraft ?? fallbackModelValue;
     const reasoningValue =
       effectiveChoice.reasoning ??
       choice.reasoning ??
@@ -3630,7 +3636,7 @@ export function SettingsDialog({
       shouldShowCustomModelInput(
         modelValue,
         knownModelIds,
-        agentCustomModelIds.has(selected.id),
+        explicitCustomMode,
       );
     const selectValue = customActive
       ? CUSTOM_MODEL_SENTINEL

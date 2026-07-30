@@ -516,12 +516,14 @@ function resolveEffectiveDesignSystemSelection({
   pluginDesignSystemId,
   projectDesignSystemId,
   appDefaultDesignSystemId,
+  disabledDesignSystemIds,
   allowAppDefault = true,
 }: {
   requestDesignSystemId?: unknown;
   pluginDesignSystemId?: unknown;
   projectDesignSystemId?: unknown;
   appDefaultDesignSystemId?: unknown;
+  disabledDesignSystemIds?: unknown;
   allowAppDefault?: boolean;
 }): { id: string | null; source: DesignSystemSelectionSource } {
   const requestId = normalizedDesignSystemId(requestDesignSystemId);
@@ -530,8 +532,15 @@ function resolveEffectiveDesignSystemSelection({
   const pluginId = normalizedDesignSystemId(pluginDesignSystemId);
   if (pluginId) return { id: pluginId, source: 'plugin' };
 
+  const disabledIds = Array.isArray(disabledDesignSystemIds)
+    ? disabledDesignSystemIds.map(normalizedDesignSystemId).filter(
+        (value): value is string => value !== null,
+      )
+    : [];
   const projectId = normalizedDesignSystemId(projectDesignSystemId);
-  if (projectId) return { id: projectId, source: 'project' };
+  if (projectId && !disabledIds.includes(projectId)) {
+    return { id: projectId, source: 'project' };
+  }
 
   if (allowAppDefault) {
     const appDefaultId = normalizedDesignSystemId(appDefaultDesignSystemId);
@@ -1273,6 +1282,7 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
           : null,
         projectDesignSystemId: runProjectForAnalytics?.designSystemId,
         appDefaultDesignSystemId: (appCfgForAnalytics as { designSystemId?: unknown }).designSystemId,
+        disabledDesignSystemIds: (appCfgForAnalytics as { disabledDesignSystems?: unknown }).disabledDesignSystems,
         allowAppDefault: runProjectForAnalytics === null,
       });
       const runProjectKind = resolveRunProjectKindForAnalytics({

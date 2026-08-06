@@ -1214,7 +1214,11 @@ process.stdin.on("end", () => {
     expect(preflight).toContain("fromJSON(needs.runners.outputs.runs_on).general_medium");
     expect(preflight).toContain("toJSON(fromJSON(needs.runners.outputs.runs_on).general_medium)");
     expect(uiP0).toContain("fromJSON(needs.runners.outputs.runs_on).ui_p0");
-    expect(uiP0).toContain("toJSON(fromJSON(needs.runners.outputs.runs_on).ui_p0)");
+    expect(uiP0).toContain("fromJSON(needs.runners.outputs.runs_on).ui_p0_heavy");
+    expect(uiP0).toContain("matrix.shard == 'project-collab'");
+    expect(uiP0).toContain(
+      "toJSON(matrix.shard == 'project-collab' && fromJSON(needs.runners.outputs.runs_on).ui_p0_heavy || fromJSON(needs.runners.outputs.runs_on).ui_p0)",
+    );
     expect(uiP0).toContain("include: ${{ fromJSON(needs.scopes.outputs.ui_p0_matrix) }}");
     expect(uiP0CiMatrix.map((entry) => entry.name)).toEqual([
       "entry-settings",
@@ -1356,6 +1360,7 @@ process.stdin.on("end", () => {
       "js_hot",
       "ui_hot",
       "ui_p0",
+      "ui_p0_heavy",
       "visual_hot",
       "windows_tools",
       "workspace_unit",
@@ -1366,7 +1371,8 @@ process.stdin.on("end", () => {
     expect(defaultRunsOn.windows_tools).toEqual(["windows-latest"]);
     expect(defaultRunsOn.js_hot).toEqual(["nexu-runners-medium"]);
     expect(defaultRunsOn.ui_hot).toEqual(["nexu-runners-large"]);
-    expect(defaultRunsOn.ui_p0).toEqual(["nexu-runners-xlarge"]);
+    expect(defaultRunsOn.ui_p0).toEqual(["nexu-runners-medium"]);
+    expect(defaultRunsOn.ui_p0_heavy).toEqual(["nexu-runners-xlarge"]);
     expect(defaultRunsOn.visual_hot).toEqual(["nexu-runners-large"]);
     expect(defaultProfiles).not.toHaveProperty("contabo_control");
     expect(defaultProfiles).not.toHaveProperty("hosted_or_blacksmith");
@@ -1381,7 +1387,8 @@ process.stdin.on("end", () => {
     expect(performanceRunsOn.windows_tools).toEqual(["windows-latest"]);
     expect(performanceRunsOn.js_hot).toEqual(["nexu-runners-medium"]);
     expect(performanceRunsOn.ui_hot).toEqual(["nexu-runners-large"]);
-    expect(performanceRunsOn.ui_p0).toEqual(["nexu-runners-xlarge"]);
+    expect(performanceRunsOn.ui_p0).toEqual(["nexu-runners-medium"]);
+    expect(performanceRunsOn.ui_p0_heavy).toEqual(["nexu-runners-xlarge"]);
     expect(performanceRunsOn.visual_hot).toEqual(["nexu-runners-large"]);
 
     const blacksmithProfiles = await runRunners("blacksmith");
@@ -1394,6 +1401,7 @@ process.stdin.on("end", () => {
     expect(blacksmithRunsOn.js_hot).toEqual(["blacksmith-4vcpu-ubuntu-2404"]);
     expect(blacksmithRunsOn.ui_hot).toEqual(["blacksmith-8vcpu-ubuntu-2404"]);
     expect(blacksmithRunsOn.ui_p0).toEqual(["blacksmith-8vcpu-ubuntu-2404"]);
+    expect(blacksmithRunsOn.ui_p0_heavy).toEqual(["blacksmith-8vcpu-ubuntu-2404"]);
     expect(blacksmithRunsOn.visual_hot).toEqual(["blacksmith-8vcpu-ubuntu-2404"]);
 
     const economicProfiles = await runRunners("economic");
@@ -1406,6 +1414,7 @@ process.stdin.on("end", () => {
     expect(economicRunsOn.js_hot).toEqual(["ubuntu-24.04"]);
     expect(economicRunsOn.ui_hot).toEqual(["ubuntu-24.04"]);
     expect(economicRunsOn.ui_p0).toEqual(["ubuntu-24.04"]);
+    expect(economicRunsOn.ui_p0_heavy).toEqual(["ubuntu-24.04"]);
     expect(economicRunsOn.visual_hot).toEqual(["ubuntu-24.04"]);
 
     for (const invalidMode of ["Economic", " economic "]) {

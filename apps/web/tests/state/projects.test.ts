@@ -16,6 +16,7 @@ import {
   importFolderProject,
   invalidateWorkspaceProjectLists,
   installGeneratedPluginFolder,
+  installPluginSource,
   listPlugins,
   listPluginsFresh,
   invalidatePluginCatalogCache,
@@ -876,7 +877,27 @@ describe('deleteProject', () => {
   it('reports failure when the daemon refuses the delete', async () => {
     vi.stubGlobal('fetch', vi.fn<typeof fetch>(async () => new Response(null, { status: 403 })));
 
-    await expect(deleteProject('someone-elses-project', personalWorkspaceContext())).resolves.toBe(false);
+    await expect(deleteProject('someone-elses-project', personalWorkspaceContext())).rejects.toMatchObject({
+      name: 'ProjectDeleteError',
+      status: 403,
+    });
+  });
+
+  it('preserves the daemon error code for analytics drill-down', async () => {
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
+      error: {
+        code: 'WORKSPACE_AUTHORITY_UNAVAILABLE',
+        message: 'workspace authority is temporarily unavailable',
+        retryable: true,
+      },
+    }), { status: 503 })));
+
+    await expect(deleteProject('project-1', personalWorkspaceContext())).rejects.toMatchObject({
+      name: 'ProjectDeleteError',
+      status: 503,
+      code: 'WORKSPACE_AUTHORITY_UNAVAILABLE',
+      message: 'workspace authority is temporarily unavailable',
+    });
   });
 });
 
@@ -1377,6 +1398,31 @@ describe('installGeneratedPluginFolder', () => {
       warnings: ['Missing open-design.json'],
       message: 'Plugin validation failed.',
       log: ['Validating generated-plugin'],
+    });
+  });
+});
+
+describe('installPluginSource diagnostics', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('drops a syntactically valid but unknown SSE error code', async () => {
+    const event = JSON.stringify({
+      kind: 'error',
+      code: 'UPSTREAM_abc123',
+      message: 'Unknown upstream failure',
+    });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(`data: ${event}\n\n`, {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    })));
+
+    await expect(installPluginSource('github:owner/repo')).resolves.toEqual({
+      ok: false,
+      warnings: [],
+      message: 'Unknown upstream failure',
+      log: ['Unknown upstream failure'],
     });
   });
 });
@@ -1996,7 +2042,10 @@ describe('deleteProject local caches', () => {
   it('keeps tabs and Design Browser caches when the delete fails', async () => {
     const store = stubWindowStore();
     vi.stubGlobal('fetch', vi.fn<typeof fetch>(async () => new Response(null, { status: 500 })));
-    await expect(deleteProject('p1')).resolves.toBe(false);
+    await expect(deleteProject('p1')).rejects.toMatchObject({
+      name: 'ProjectDeleteError',
+      status: 500,
+    });
     expect(store.has(tabsKey)).toBe(true);
     expect(store.has(historyKey)).toBe(true);
     expect(store.has(viewportKey)).toBe(true);

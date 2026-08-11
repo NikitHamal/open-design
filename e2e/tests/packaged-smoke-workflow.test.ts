@@ -1079,7 +1079,7 @@ process.stdin.on("end", () => {
 
   it("[P2] closes packaged-leaf coverage without duplicating the broad E2E lane", async () => {
     const workflow = await readFile(ciWorkflowPath, "utf8");
-    const workspaceUnit = sectionBetween(workflow, "  workspace_unit_tests:", "  windows_tools_pack_payload_tests:");
+    const workspaceUnit = sectionBetween(workflow, "  workspace_unit_tests:", "  daemon_unit_tests:");
 
     expect(workspaceUnit).toContain(`if [ "\${{ needs.scopes.outputs.tools_pack_tests_required }}" = "true" ]; then
             pnpm --filter @open-design/desktop build
@@ -1090,6 +1090,19 @@ process.stdin.on("end", () => {
               pnpm --filter @open-design/e2e test tests/packaged-launcher-update-loop.test.ts
             fi
           fi`);
+  });
+
+  it("[P1] runs the complete daemon suite in four required shards", async () => {
+    const workflow = await readFile(ciWorkflowPath, "utf8");
+    const daemonTests = sectionBetween(workflow, "  daemon_unit_tests:", "  windows_tools_pack_payload_tests:");
+    const validate = sectionBetween(workflow, "  validate:", "  runtime_summary:");
+
+    expect(daemonTests).toContain("if: ${{ needs.scopes.outputs.daemon_tests_required == 'true' }}");
+    expect(daemonTests).toContain("fail-fast: false");
+    expect(daemonTests).toContain("shard: [1, 2, 3, 4]");
+    expect(daemonTests).toContain("pnpm --filter @open-design/daemon test --shard=${{ matrix.shard }}/4");
+    expect(validate).toContain("- daemon_unit_tests");
+    expect(validate).toContain('when($out.daemon_tests_required == "true"; ["daemon_unit_tests"])');
   });
 
   it("[P2] skips the critical fallback for pure packaged-leaf changes and stays fail-closed elsewhere", async () => {
@@ -1245,7 +1258,8 @@ process.stdin.on("end", () => {
     const runners = sectionBetween(workflow, "  runners:", "  scopes:");
     const scopes = sectionBetween(workflow, "  scopes:", "  static_gate:");
     const staticGate = sectionBetween(workflow, "  static_gate:", "  preflight:");
-    const workspaceUnitTests = sectionBetween(workflow, "  workspace_unit_tests:", "  windows_tools_pack_payload_tests:");
+    const workspaceUnitTests = sectionBetween(workflow, "  workspace_unit_tests:", "  daemon_unit_tests:");
+    const daemonUnitTests = sectionBetween(workflow, "  daemon_unit_tests:", "  windows_tools_pack_payload_tests:");
     const webWorkspaceTests = sectionBetween(workflow, "  web_workspace_tests:", "  e2e_vitest:");
     const e2eVitest = sectionBetween(workflow, "  e2e_vitest:", "  playwright_critical:");
     const preflight = sectionBetween(workflow, "  preflight:", "  workspace_unit_tests:");
@@ -1263,6 +1277,8 @@ process.stdin.on("end", () => {
     expect(staticGate).toContain("fromJSON(needs.runners.outputs.runs_on).control");
     expect(workspaceUnitTests).toContain("fromJSON(needs.runners.outputs.runs_on).workspace_unit");
     expect(workspaceUnitTests).toContain("toJSON(fromJSON(needs.runners.outputs.runs_on).workspace_unit)");
+    expect(daemonUnitTests).toContain("fromJSON(needs.runners.outputs.runs_on).workspace_unit");
+    expect(daemonUnitTests).toContain("toJSON(fromJSON(needs.runners.outputs.runs_on).workspace_unit)");
     expect(webWorkspaceTests).toContain("fromJSON(needs.runners.outputs.runs_on).js_hot");
     expect(webWorkspaceTests).toContain("toJSON(fromJSON(needs.runners.outputs.runs_on).js_hot)");
     expect(webWorkspaceTests).not.toContain('"od-persistent-ci"');
@@ -1322,6 +1338,7 @@ process.stdin.on("end", () => {
       grep: String.raw`\[P0\]`,
       files: ["ui/app-restoration.test.ts", "ui/critical-smoke.test.ts"],
     });
+    expect(uiP0Groups["entry-settings"].files).toContain("ui/home-hero-rail.test.ts");
     expect(workflow).not.toContain("  ui_p0_smoke:");
     expect(uiP0).toContain("run-ui-group critical-extras");
     expect(uiP0).toContain("Preserve project-runtime domain artifact");
@@ -1349,6 +1366,34 @@ process.stdin.on("end", () => {
     expect(workflow).not.toContain("needs.runners.outputs.contabo_control");
     expect(workflow).not.toContain("needs.runners.outputs.hosted_or_blacksmith");
     expect(workflow).not.toContain("needs.runners.outputs.blacksmith_default");
+  });
+
+  it.each([
+    {
+      name: "workspace runner assertions",
+      workflowPath: ciWorkflowPath,
+      jobStart: "  workspace_unit_tests:",
+      jobEnd: "  daemon_unit_tests:",
+      marker: "fromJSON(needs.runners.outputs.runs_on).workspace_unit",
+    },
+    {
+      name: "Functional E2E commit pin",
+      workflowPath: releasePrereleaseWorkflowPath,
+      jobStart: "  functional_e2e:",
+      jobEnd: "  daemon_unit_tests:",
+      marker: "ref: ${{ needs.metadata.outputs.commit }}",
+    },
+  ])("[P1] keeps $name bounded to its owning job", async ({
+    workflowPath,
+    jobStart,
+    jobEnd,
+    marker,
+  }) => {
+    const workflow = await readFile(workflowPath, "utf8");
+    const owningJob = sectionBetween(workflow, jobStart, jobEnd);
+    const mutated = workflow.replace(owningJob, owningJob.replaceAll(marker, "regressed-marker"));
+
+    expect(sectionBetween(mutated, jobStart, jobEnd)).not.toContain(marker);
   });
 
   it("[P2] caps Playwright concurrency independently from build concurrency", async () => {
@@ -1387,7 +1432,7 @@ process.stdin.on("end", () => {
     expect(staticGate).toContain("run: actionlint -color");
   });
 
-  it("[P2] keeps visual ownership and generic full UI sharding explicit", async () => {
+  it("[P2] keeps visual ownership and reusable full UI sharding explicit", async () => {
     const playwrightConfig = await readFile(playwrightConfigPath, "utf8");
     const benchmarkWorkflow = await readFile(uiExtendedMainWorkflowPath, "utf8");
     const extendedP0 = sectionBetween(benchmarkWorkflow, "  ui_p0:", "  ui_extended:");
@@ -1401,7 +1446,11 @@ process.stdin.on("end", () => {
       .sort();
 
     expect(playwrightConfig).toContain("testIgnore: 'visual-*.test.ts'");
-    expect(benchmarkWorkflow).not.toContain("\n  schedule:");
+    expect(benchmarkWorkflow).toContain("  workflow_call:");
+    expect(benchmarkWorkflow).toContain('description: "Exact git ref to validate. Prerelease passes its resolved build commit."');
+    expect(benchmarkWorkflow).toContain("ref: ${{ inputs.ref || github.sha }}");
+    expect(benchmarkWorkflow).not.toContain("  schedule:");
+    expect(benchmarkWorkflow).not.toContain("github.event_name == 'schedule'");
     expect(benchmarkWorkflow).not.toContain("layout:");
     expect(benchmarkWorkflow).toContain("run-ui-group critical-extras");
     expect(benchmarkWorkflow).toContain("Preserve project-runtime domain artifact");
@@ -1409,6 +1458,7 @@ process.stdin.on("end", () => {
     expect(extendedP0Names).toEqual(uiP0CiMatrix.map((entry) => entry.name));
     expect(benchmarkWorkflow).toContain("fromJSON(needs.p0_runners.outputs.runs_on).ui_p0");
     expect(fullUi).toContain("fromJSON(needs.p0_runners.outputs.runs_on).ui_hot");
+    expect(fullUi).toContain("inputs.suite == 'full'");
     expect(fullUi).toContain("shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]");
     expect(fullUi).toContain('OD_PLAYWRIGHT_FULLY_PARALLEL: "1"');
     expect(fullUi).not.toContain("OD_PLAYWRIGHT_WORKERS");
@@ -1418,6 +1468,64 @@ process.stdin.on("end", () => {
     expect(fullUi).not.toContain("matrix.files");
     expect(fullUi).not.toContain("--grep");
     expect(fullUiFiles).toEqual([]);
+  });
+
+  it("[P1] rejects unsupported reusable Functional E2E suite values before running suites", async () => {
+    const workflow = await readFile(uiExtendedMainWorkflowPath, "utf8");
+    const validation = sectionBetween(workflow, "  validate_inputs:", "  p0_runners:");
+    const p0Runners = sectionBetween(workflow, "  p0_runners:", "  ui_p0:");
+    const uiP0 = sectionBetween(workflow, "  ui_p0:", "  ui_extended:");
+    const uiP1 = sectionBetween(workflow, "  ui_extended:", "  ui_full:");
+    const uiFull = workflow.slice(workflow.indexOf("  ui_full:"));
+
+    expect(validation).toContain('case "$SUITE" in');
+    expect(validation).toContain("p0|p0p1|full) ;;");
+    expect(validation).toContain("Unsupported suite:");
+    expect(validation).toContain("exit 1");
+    expect(p0Runners).toContain("needs: [validate_inputs]");
+    expect(uiP0).toContain("needs: [validate_inputs, p0_runners]");
+    expect(uiP1).toContain("needs: [validate_inputs]");
+    expect(uiFull).toContain("needs: [validate_inputs, p0_runners]");
+  });
+
+  it("[P1] gates prerelease packaging on full Functional E2E at the resolved build commit", async () => {
+    const [prerelease, functionalE2e] = await Promise.all([
+      readFile(releasePrereleaseWorkflowPath, "utf8"),
+      readFile(uiExtendedMainWorkflowPath, "utf8"),
+    ]);
+
+    const gate = sectionBetween(prerelease, "  functional_e2e:", "  daemon_unit_tests:");
+    expect(gate).toContain("needs: metadata");
+    expect(gate).toContain("uses: ./.github/workflows/ui-extended-main.yml");
+    expect(gate).toContain("ref: ${{ needs.metadata.outputs.commit }}");
+    expect(gate).toContain("suite: full");
+
+    const daemonGate = sectionBetween(prerelease, "  daemon_unit_tests:", "  verify:");
+    expect(daemonGate).toContain("shard: [1, 2, 3, 4]");
+    expect(daemonGate).toContain("ref: ${{ needs.metadata.outputs.commit }}");
+    expect(daemonGate).toContain("pnpm --filter @open-design/daemon test --shard=${{ matrix.shard }}/4");
+
+    expect(functionalE2e).toContain("workflow_call:");
+    expect(functionalE2e).not.toContain("schedule:");
+    expect(functionalE2e).toContain("ref: ${{ inputs.ref || github.sha }}");
+
+    for (const [start, end] of [
+      ["  build_mac:", "  build_mac_intel:"],
+      ["  build_mac_intel:", "  build_win:"],
+      ["  build_win:", "  build_linux:"],
+      ["  build_linux:", "  publish:"],
+    ] as const) {
+      const buildJob = sectionBetween(prerelease, start, end);
+      expect(buildJob).toContain("needs: [metadata, functional_e2e, daemon_unit_tests, verify]");
+      expect(buildJob).toContain("ref: ${{ needs.metadata.outputs.commit }}");
+    }
+
+    const publish = sectionBetween(prerelease, "  publish:", "  cleanup_partial_release_assets:");
+    expect(publish).toContain("- functional_e2e");
+    expect(publish).toContain("- daemon_unit_tests");
+    expect(publish).toContain("needs.functional_e2e.result == 'success'");
+    expect(publish).toContain("needs.daemon_unit_tests.result == 'success'");
+    expect(publish).toContain("ref: ${{ needs.metadata.outputs.commit }}");
   });
 
   it("[P2] rejects duplicate file assignments across UI P0 shards", () => {

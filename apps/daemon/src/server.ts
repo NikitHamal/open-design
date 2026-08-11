@@ -813,7 +813,14 @@ import {
 } from './collab/sync-snapshot-store.js';
 import { createPersistentSyncCache } from './collab/persistent-sync-cache.js';
 import { createSwrCache } from './collab/swr-cache.js';
-import { invalidateTeamResourceListingCaches } from './collab/team-resource-list-cache.js';
+import {
+  COLLAB_VELA_FANOUT_CONCURRENCY,
+  ConcurrencyGate,
+} from './collab/concurrency-gate.js';
+import {
+  createTeamResourceListCache,
+  invalidateTeamResourceListingCaches,
+} from './collab/team-resource-list-cache.js';
 import {
   createRememberedTeamResourceScopes,
   type RememberedTeamResourceScopeLease,
@@ -5739,62 +5746,29 @@ export async function startServer({
       },
     },
   );
-  const teamResourceScopeKey = (scope: TeamResourceRequestScope): string =>
-    JSON.stringify([
-      scope.principal.teamId,
-      scope.principal.memberId,
-      scope.principal.role,
-      scope.principal.lifecycleState,
-    ]);
+  // ONE materialization budget for the whole daemon, not one per resource kind.
+  // Design systems, plugins, and skills are three separate listing caches that
+  // a single client poll refreshes together, so a gate owned by each cache
+  // would bound each kind on its own and let the real peak reach the cap times
+  // three. The gate lives here, at the composition root, because here is the
+  // only place that can see all three.
+  const teamResourceMaterializationGate = new ConcurrencyGate(
+    COLLAB_VELA_FANOUT_CONCURRENCY,
+  );
   const cachedTeamResourceList = (
     share: TeamResourceShareService,
     sync?: (
       resource: TeamResourceShareRecord,
       scope: TeamResourceRequestScope,
     ) => Promise<void>,
-  ) => {
-    const listings = new Map<
-      string,
-      ReturnType<typeof createSwrCache<{
-        ids: string[];
-        resources: TeamResourceShareRecord[];
-      }>>
-    >();
-    const materialize = async (
-      scope: TeamResourceRequestScope,
-      readOptions?: TeamResourceSharedReadOptions,
-    ) => {
-      const resources = await share.sharedResources(scope, readOptions);
-      if (sync) {
-        await Promise.all(resources.map((resource) => sync(resource, scope)));
-      }
-      return { ids: resources.map((resource) => resource.id), resources };
-    };
-    const read = async (scope: TeamResourceRequestScope) => {
-      const key = teamResourceScopeKey(scope);
-      let listing = listings.get(key);
-      if (!listing) {
-        listing = createSwrCache(
-          () => materialize(scope),
-          () => key,
-          3000,
-        );
-        listings.set(key, listing);
-      }
-      return listing();
-    };
-    return Object.assign(read, {
-      authoritative(scope: TeamResourceRequestScope) {
-        return materialize(scope, { authoritative: true });
-      },
-      invalidate(scope: TeamResourceRequestScope) {
-        const key = teamResourceScopeKey(scope);
-        listings.get(key)?.invalidate();
-        listings.delete(key);
-        sharedTeamResourcesCommand.invalidate(scope.principal.teamId);
-      },
+  ) =>
+    createTeamResourceListCache({
+      share,
+      ...(sync ? { sync } : {}),
+      gate: teamResourceMaterializationGate,
+      invalidateSharedCommand: (workspaceId) =>
+        sharedTeamResourcesCommand.invalidate(workspaceId),
     });
-  };
   const runTeamResourceCommand = async (
     args: string[],
     workspaceId?: string,

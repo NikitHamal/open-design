@@ -926,6 +926,7 @@ import {
   CHAT_TOOL_ENDPOINTS,
   CHAT_TOOL_OPERATIONS,
   PROJECT_EXPORT_TOOL_ENDPOINT,
+  resolveChatToolTokenTtlMs,
   toolTokenRegistry,
 } from './tool-tokens.js';
 import {
@@ -2793,7 +2794,9 @@ export async function startServer({
     PLUGIN_LOCKFILE_PATH,
     PLUGIN_UPLOAD_MAX_BYTES,
   });
-  const mediaTaskStore = createMediaTaskStore(db);
+  const mediaTaskStore = createMediaTaskStore(db, {
+    isRunActive: (runId) => toolTokenRegistry.activeRunTokenCount(runId) > 0,
+  });
   const {
     authorizeToolRequest,
     optionalToolGrantFromRequest,
@@ -9408,12 +9411,15 @@ export async function startServer({
         };
       }
     }
+    const inactivityTimeoutMs = resolveChatRunInactivityTimeoutMs(def.inactivityTimeoutMs);
+    const toolTokenTtlMs = resolveChatToolTokenTtlMs(inactivityTimeoutMs);
     const toolTokenGrant = cwd && typeof projectId === 'string' && projectId
       ? toolTokenRegistry.mint({
           runId,
           projectId,
           allowedEndpoints: CHAT_TOOL_ENDPOINTS,
           allowedOperations: CHAT_TOOL_OPERATIONS,
+          ttlMs: toolTokenTtlMs,
           ...(pluginGrantContext ?? {}),
         })
       : null;
@@ -11288,7 +11294,6 @@ export async function startServer({
     // here; on this branch `send` was hoisted into the AMR preflight
     // earlier, so we keep only the new `runStartTimeMs` declaration.
     const runStartTimeMs = Date.now();
-    const inactivityTimeoutMs = resolveChatRunInactivityTimeoutMs(def.inactivityTimeoutMs);
     const firstOutputTimeoutMs =
       resolveChatRunFirstOutputTimeoutMs(def.firstOutputTimeoutMs);
     const artifactQuietPeriodMs = resolveChatRunArtifactQuietPeriodMs();
@@ -11508,6 +11513,9 @@ export async function startServer({
       // E-lite: stamp the last-activity clock BEFORE the disabled-watchdog bail
       // so `last_progress_age_ms` is recorded even when the watchdog is off.
       run.lastAgentActivityAt = Date.now();
+      if (toolTokenGrant) {
+        toolTokenRegistry.refreshToken(toolTokenGrant.token, { ttlMs: toolTokenTtlMs });
+      }
       const delay = activeInactivityTimeoutMs();
       if (delay <= 0) return;
       clearInactivityWatchdog();

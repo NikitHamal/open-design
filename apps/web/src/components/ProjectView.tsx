@@ -3548,17 +3548,25 @@ export function ProjectView({
       const artifactToPersist = persistedHtml === art.html ? art : { ...art, html: persistedHtml };
       const baseName = artifactBaseNameFor(art);
       const ext = artifactExtensionFor(art);
-      // Pick a name that doesn't collide with an existing project file.
-      // The first run uses `<base>.<ext>`; subsequent runs append `-2`, `-3`…
-      // so prior artifacts aren't silently overwritten.
       const currentProjectFiles = projectFilesSnapshot ?? projectFilesRef.current;
       const existing = new Set(currentProjectFiles.map((f) => f.name));
       let fileName = `${baseName}${ext}`;
+      // A non-empty identifier is stable artifact identity: when its canonical
+      // filename already exists, update that file in place. Title- and
+      // fallback-derived names still suffix collisions so new artifacts cannot
+      // silently replace unrelated project files.
+      const updatesExplicitlyIdentifiedFile =
+        Boolean(art.identifier?.trim()) && existing.has(fileName);
+      let collisionFileName = fileName;
       let n = 2;
-      while (existing.has(fileName) && savedArtifactRef.current !== fileName) {
-        fileName = `${baseName}-${n}${ext}`;
+      while (
+        existing.has(collisionFileName) &&
+        savedArtifactRef.current !== collisionFileName
+      ) {
+        collisionFileName = `${baseName}-${n}${ext}`;
         n += 1;
       }
+      if (!updatesExplicitlyIdentifiedFile) fileName = collisionFileName;
       if (ext === '.html') {
         const pointerProjectFiles = filterProjectFilesByMinMtime(
           currentProjectFiles,
@@ -3566,7 +3574,7 @@ export function ProjectView({
         );
         const pointerTarget = resolveHtmlPointerArtifactTarget({
           content: artifactToPersist.html,
-          candidateFileName: fileName,
+          candidateFileName: collisionFileName,
           projectFiles: pointerProjectFiles,
         });
         if (pointerTarget) {

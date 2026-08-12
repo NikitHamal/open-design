@@ -5484,6 +5484,7 @@ export function ProjectView({
           || spuriouslyFailedPending
           || recoverableGenericDisconnectFailed;
         void reattachDaemonRun({
+          agentId: message.agentId,
           runId,
           projectId: project.id,
           conversationId: reattachConversationId,
@@ -5791,9 +5792,11 @@ export function ProjectView({
                     if (
                       shouldPublishRunFinishedEvent
                       && latestRunStatus?.status === 'succeeded'
+                      && latestRunStatus.agentId === 'amr'
                       && typeof latestRunStatus.artifactCount === 'number'
                     ) {
                       publishDaemonRunFinishedEvent({
+                        agentId: latestRunStatus.agentId,
                         runId,
                         projectId: project.id,
                         conversationId: reattachConversationId,
@@ -5884,9 +5887,11 @@ export function ProjectView({
                   } else if (latestRunStatus.status === 'succeeded') {
                     if (
                       shouldPublishRunFinishedEvent
+                      && latestRunStatus.agentId === 'amr'
                       && typeof latestRunStatus.artifactCount === 'number'
                     ) {
                       publishDaemonRunFinishedEvent({
+                        agentId: latestRunStatus.agentId,
                         runId,
                         projectId: project.id,
                         conversationId: reattachConversationId,
@@ -7452,8 +7457,12 @@ export function ProjectView({
                 }
                 if (!latestRunStatus || isActiveRunStatus(latestRunStatus.status)) {
                 } else if (latestRunStatus.status === 'succeeded') {
-                  if (typeof latestRunStatus.artifactCount === 'number') {
+                  if (
+                    latestRunStatus.agentId === 'amr'
+                    && typeof latestRunStatus.artifactCount === 'number'
+                  ) {
                     publishDaemonRunFinishedEvent({
+                      agentId: latestRunStatus.agentId,
                       runId: runIdForGenericDisconnect,
                       projectId: project.id,
                       conversationId: runConversationId,
@@ -8005,7 +8014,11 @@ export function ProjectView({
       commentAttachments: ChatCommentAttachment[],
       meta?: ChatSendMeta,
     ): Promise<ChatSendOutcome> => {
-      if (activeConversationId) {
+      if (
+        activeConversationId
+        && config.mode === 'daemon'
+        && config.agentId === 'amr'
+      ) {
         const decision = await requestAmrArtifactUpgrade({
           projectId: project.id,
           conversationId: activeConversationId,
@@ -8015,7 +8028,7 @@ export function ProjectView({
       }
       void handleSend(prompt, attachments, commentAttachments, meta);
     },
-    [activeConversationId, handleSend, project.id],
+    [activeConversationId, config.agentId, config.mode, handleSend, project.id],
   );
 
   // Cancel every in-flight run for the current conversation (the user's own

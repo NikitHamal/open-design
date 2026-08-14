@@ -4190,17 +4190,19 @@ function FileVersionManagerModal({
               <span className="share-menu-icon"><RemixIcon name="file-zip-line" size={15} /></span>
               <span>{t('fileViewer.exportZip')}</span>
             </button>
-            <button
-              type="button"
-              className="share-menu-item"
-              role="menuitem"
-              onClick={() => {
-                exportVersionHtml(selectedVersion);
-              }}
-            >
-              <span className="share-menu-icon"><RemixIcon name="file-code-line" size={15} /></span>
-              <span>{t('fileViewer.exportHtml')}</span>
-            </button>
+            {selectedVersion.current ? (
+              <button
+                type="button"
+                className="share-menu-item"
+                role="menuitem"
+                onClick={() => {
+                  exportVersionHtml(selectedVersion);
+                }}
+              >
+                <span className="share-menu-icon"><RemixIcon name="file-code-line" size={15} /></span>
+                <span>{t('fileViewer.exportHtml')}</span>
+              </button>
+            ) : null}
           </div>
         ) : null}
       </aside>
@@ -13560,7 +13562,6 @@ function HtmlViewer({
     fireShareExport('html', () => exportProjectAsHtml({
       projectId,
       filePath: file.name,
-      fallbackHtml: context?.content ?? source ?? '',
       fallbackTitle: context?.title ?? exportTitle,
       workspaceContext,
       ...(context?.versionId ? { versionId: context.versionId } : {}),
@@ -15653,7 +15654,6 @@ function HtmlViewer({
                       fireShareExport('html', () => exportProjectAsHtml({
                         projectId,
                         filePath: file.name,
-                        fallbackHtml: source ?? '',
                         fallbackTitle: exportTitle,
                         workspaceContext,
                       }));

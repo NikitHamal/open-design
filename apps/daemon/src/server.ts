@@ -136,6 +136,7 @@ import {
   retryFinalResultForRunStatus,
   runArtifactCountForRun,
   runDesignSystemCreatedForRun,
+  runFilesWrittenForRun,
   runPreviewModuleCountForRun,
   runRetryEventsForAnalytics,
   runSideEffectsForRun,
@@ -10317,6 +10318,7 @@ export async function startServer({
         artifactCount: runArtifactCountForRun(run),
         designSystemCreated: runDesignSystemCreatedForRun(run),
         previewModuleCount: runPreviewModuleCountForRun(run),
+        filesWritten: runFilesWrittenForRun(run),
       });
       let outcome;
       if (!artifactBaseline || artifactBaseline.contended) {
@@ -10333,6 +10335,7 @@ export async function startServer({
             artifactsModified: diff.modified,
             designSystemCreated: diff.designSystemCreated,
             previewModuleCount: diff.previewModuleCount,
+            filesWritten: diff.filesWritten,
             projectRoot: artifactBaseline.cwd,
             diff,
           };

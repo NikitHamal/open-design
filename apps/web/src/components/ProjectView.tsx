@@ -5591,7 +5591,7 @@ export function ProjectView({
                 genericDisconnectRetriesRef.current.delete(runId);
               }
               genericDisconnectBackoffUntilRef.current.delete(runId);
-              replayedEvents = [...replayedEvents, ev];
+              replayedEvents = appendCoalescedAgentEvent(replayedEvents, ev);
               textBuffer.appendEvent(ev);
             },
             onDone: async () => {

@@ -28,6 +28,7 @@ import {
   composeOdNextStrategyStableRequestContextV2,
   executionProfileFromStreamFormat,
   PLUGIN_SHARE_ACTION_PLUGIN_IDS,
+  resolveOdNextDeckFrameworkMode,
 } from '@open-design/contracts';
 import { isTodoWriteToolName, stopReasonIsTruncation, todoItemsFromTodoWriteInput } from '@open-design/contracts';
 import type {
@@ -10092,11 +10093,48 @@ export async function startServer({
     const odNextLayoutPrimitivesCss = odNextStrategyRecipe?.taskType === 'prototype'
       ? selectOdNextLayoutPrimitivesCss(odNextStrategyRecipe.taskResources)
       : null;
+    const odNextDeckIntent = odNextStrategyRecipe?.taskType !== 'ppt'
+      && freeformDeckSignal === true;
+    const isOdNextDeckRequest = odNextStrategyRecipe?.taskType === 'ppt'
+      || odNextDeckIntent;
+    const hasSelectedDeckSeed = odNextStrategyRecipe?.taskType === 'ppt' && Boolean(
+      template?.files?.some((file) => /\.html?$/i.test(file.name))
+      || /(?:^|\/)assets\/template\.html\b/i.test(skillBody ?? '')
+      || frozenSkillPackage?.selections?.some((selection) =>
+        /(?:^|\/)assets\/template\.html\b/i.test(selection.body)
+        || selection.files.some((file) => /(?:^|\/)assets\/template\.html$/i.test(file.path)),
+      ),
+    );
+    let hasExistingDeckArtifact = false;
+    if (
+      odNextStrategyRecipe?.taskType === 'ppt'
+      && typeof projectId === 'string'
+      && projectId
+    ) {
+      try {
+        const files = await listFiles(PROJECTS_DIR, projectId, { metadata });
+        hasExistingDeckArtifact = files.some((file) => /\.html?$/i.test(file.name));
+      } catch {
+        // Inventory failure must not authorize replacing a potentially legacy
+        // deck. The later project setup reports the underlying filesystem issue.
+        hasExistingDeckArtifact = true;
+      }
+    }
+    const odNextDeckFrameworkMode = isOdNextDeckRequest && odNextStrategyRecipe
+      ? resolveOdNextDeckFrameworkMode({
+          taskType: odNextStrategyRecipe.taskType,
+          deckIntent: odNextDeckIntent,
+          hasSelectedDeckSeed,
+          hasExistingDeckArtifact,
+        })
+      : undefined;
     const odNextStableRequestContext = odNextStrategyRecipe
       ? {
           agentId,
           streamFormat,
           executionProfile: executionProfileFromStreamFormat(streamFormat),
+          deckIntent: odNextDeckIntent,
+          deckFrameworkMode: odNextDeckFrameworkMode,
           metadata,
           template,
           exampleReference: odNextExampleReference,
@@ -10136,6 +10174,8 @@ export async function startServer({
           exampleReference: odNextExampleReference,
           deviceFrame: odNextDeviceFrame,
           layoutPrimitivesCss: odNextLayoutPrimitivesCss,
+          deckIntent: odNextDeckIntent,
+          deckFrameworkMode: odNextDeckFrameworkMode,
           designSystemBody,
           designSystemTitle,
           craftBody,
@@ -10173,7 +10213,10 @@ export async function startServer({
       odNextRecipeIdentity,
       odNextRuntimeFacts,
       odNextStableContextPrompt: odNextStableRequestContext
-        ? composeOdNextStrategyStableRequestContextV2(odNextStableRequestContext)
+        ? composeOdNextStrategyStableRequestContextV2(
+            odNextStableRequestContext,
+            odNextStrategyRecipe?.executionProfile ?? 'filesystem',
+          )
         : '',
       activeSkillDir,
       activeSkillDirs: odNextStrategyRecipe ? [] : activeSkillDirs,

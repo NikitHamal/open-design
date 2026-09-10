@@ -44,6 +44,7 @@ import {
 } from '../runtime/chat/reconnect-state';
 import { forkBoundaryMessageIndex } from '../runtime/chat/fork-boundary';
 import { resolveRecoveryActionBlockReason } from '../runtime/chat/recovery-gating';
+import { loadConversationTranscript } from '../state/load-conversation-transcript';
 import { normalizeCustomReason } from '@open-design/contracts/analytics';
 import {
   deletePreviewComment,
@@ -3948,6 +3949,7 @@ export function ProjectView({
     // stream or later replace those rows with an empty snapshot.
     setMessagesInitialized(false);
     let cancelled = false;
+    const transcriptController = new AbortController();
     const requestWorkspaceContext = projectRunWorkspaceContextRef.current;
     setFailedMessagesConversationId(null);
     if (!preservingLiveConversation) {
@@ -3990,10 +3992,11 @@ export function ProjectView({
           if (cancelled || previewCommentsGenerationRef.current !== commentsGeneration) return;
           if (!reloadingCurrentConversation) setPreviewComments([]);
         });
-        const list = await listMessages(
+        const list = await loadConversationTranscript(
           project.id,
           activeConversationId,
           requestWorkspaceContext,
+          transcriptController.signal,
         );
         if (cancelled) return;
         setMessages((current) =>
@@ -4015,7 +4018,9 @@ export function ProjectView({
         setFailedMessagesConversationId(null);
       } catch (err) {
         if (cancelled) return;
-        const message = err instanceof Error ? err.message : 'Could not load messages for this conversation.';
+        const message = err instanceof Error && err.message
+          ? err.message
+          : 'Could not load messages for this conversation.';
         if (!reloadingCurrentConversation) {
           setMessages((current) =>
             preservingLiveConversation
@@ -4038,6 +4043,7 @@ export function ProjectView({
     })();
     return () => {
       cancelled = true;
+      transcriptController.abort();
     };
   }, [
     project.id,

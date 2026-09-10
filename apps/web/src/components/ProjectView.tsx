@@ -141,9 +141,10 @@ import { playSound, showCompletionNotification } from '../utils/notifications';
 import { randomUUID } from '../utils/uuid';
 import { DEFAULT_NOTIFICATIONS, KNOWN_PROVIDERS } from '../state/config';
 import type { TodoItem } from '../runtime/todos';
-import type {
-  AmrAuthRetryContinuation,
-  AmrAuthRetryPersonalAdoptionWitness,
+import {
+  amrAuthRetryMatchesRouteContext,
+  type AmrAuthRetryContinuation,
+  type AmrAuthRetryPersonalAdoptionWitness,
 } from '../runtime/amr-auth-retry-continuation';
 import {
   appendErrorStatusEvent,
@@ -3557,6 +3558,21 @@ export function ProjectView({
     ),
   });
   const currentConversationActionDisabled = currentConversationActionBlockReason !== null;
+  // Directory and project scope may project different roles for the same
+  // principal. Only defer comparison while that scope is still unresolved.
+  const amrAuthRetryAuthorityPending = Boolean(
+    projectWorkspaceScopeState.loading
+    && !projectWorkspaceScopeState.failure
+    && projectCollab.writerAuthority !== 'denied'
+    && amrAuthRetryContinuation
+    && projectRunWorkspaceContext
+    && amrAuthRetryMatchesRouteContext(amrAuthRetryContinuation, projectRunWorkspaceContext),
+  );
+  const amrAuthRetryReady = !projectWorkspaceScopeState.loading
+    && !projectWorkspaceScopeState.failure
+    && messagesAuthorityKeyRef.current === projectRunAuthorityKey
+    && !currentConversationActionDisabled;
+
   const currentConversationQueueDisabled = projectMutationReadOnly
     || currentConversationLoading
     || failedMessagesConversationId === activeConversationId;
@@ -10640,6 +10656,13 @@ export function ProjectView({
           conversationId: activeConversationId,
           assistantId: failedAssistant.id,
           workspaceIdentityKey: projectRunAuthorityKey,
+          workspacePrincipal: projectRunWorkspaceContext
+            ? {
+                workspaceId: projectRunWorkspaceContext.workspaceId,
+                workspaceType: projectRunWorkspaceContext.workspaceType,
+                workspaceMemberId: projectRunWorkspaceContext.workspaceMemberId,
+              }
+            : null,
           originMountId: amrAuthRetryMountIdRef.current,
         });
       }
@@ -10656,6 +10679,7 @@ export function ProjectView({
       onOpenAmrSettings,
       project.id,
       projectRunAuthorityKey,
+      projectRunWorkspaceContext,
     ],
   );
   // PR #3157: Antigravity's `agy -p` cannot complete OAuth on its own,
@@ -13330,6 +13354,8 @@ export function ProjectView({
               amrAuthRetryContinuation={amrAuthRetryContinuation}
               amrAuthRetryMountId={amrAuthRetryMountIdRef.current}
               amrAuthRetryWorkspaceIdentityKey={projectRunAuthorityKey}
+              amrAuthRetryAuthorityPending={amrAuthRetryAuthorityPending}
+              amrAuthRetryReady={amrAuthRetryReady}
               amrAuthRetryPersonalAdoptionWitness={amrAuthRetryPersonalAdoptionWitness}
               onArmAmrAuthRetryContinuation={onArmAmrAuthRetryContinuation}
               onConsumeAmrAuthRetryContinuation={onConsumeAmrAuthRetryContinuation}

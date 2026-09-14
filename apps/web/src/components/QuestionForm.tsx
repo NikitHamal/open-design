@@ -1354,7 +1354,6 @@ function OptionButton({
       type="button"
       role={role}
       aria-checked={on}
-      title={option.description}
       disabled={disabled === true}
       className={`qf-chip${on ? ' qf-chip-on' : ''}${maxed === true ? ' qf-chip-disabled' : ''}`}
       onClick={onPick}

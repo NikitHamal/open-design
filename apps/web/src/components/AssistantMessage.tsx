@@ -1357,6 +1357,7 @@ function AssistantMessageImpl({
           <FileOpsSummary
             entries={turnArtifactPanelEntries}
             projectFileNames={projectFileNames}
+            projectFiles={projectFiles}
             onRequestOpenFile={onRequestOpenFile}
             projectId={projectId ?? undefined}
             onPublish={onArtifactShare}

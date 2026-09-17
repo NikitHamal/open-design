@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { startEvidenceDelivery } from './services/evidence-delivery.js';
 import type {
   DesktopExportArtifactInput,
   DesktopExportArtifactResult,
@@ -7782,6 +7783,7 @@ export async function startServer({
       readRunTelemetrySinkConfig(process.env, configuredAmrEnv()),
     ),
   );
+  const stopEvidenceDelivery = startEvidenceDelivery(RUNTIME_DATA_DIR);
   const strategyWriteEvidence = createStrategyRunWriteEvidenceRecorder(db);
   const codexThreadCleanupOwner = createCodexThreadCleanupOwner();
   const design = {
@@ -7901,7 +7903,11 @@ export async function startServer({
       if (reportedRuns.has(run.id)) return;
       if (run.assistantMessageId) {
         const messageTelemetry = getMessageTelemetryFinalizationState(db, run.assistantMessageId);
-        if (messageTelemetry.finalizedAt !== null) return;
+        // An empty canceled assistant can be marked finalized by the UI without
+        // ever claiming a Task delivery. For Task-owned Runs, let the durable gates in
+        // reportFinalizedMessage decide whether delivery is already owned.
+        if (messageTelemetry.finalizedAt !== null
+          && !getStrategyTaskExecutionByRunId(db, run.id)) return;
       }
       reportFinalizedMessage(
         {
@@ -7983,7 +7989,18 @@ export async function startServer({
     console.warn('[runs] terminal reconciliation failed', error);
   });
 
-  const reportFeedback = telemetry.reportFeedback;
+  const reportFeedback = (req) => {
+    // Resolve Task ownership on the server, using the same representation as
+    // completed-run telemetry. The client does not choose a trace or sink.
+    const representation = taskObservationRollout.representationForRun(req.runId);
+    const task = (representation === 'task_accepted' || representation === 'task_pending')
+      ? getStrategyTaskExecutionByRunId(db, req.runId)
+      : null;
+    return telemetry.reportFeedback({
+      ...req,
+      ...(task ? { traceId: `strategy-task:${task.taskExecutionId}` } : {}),
+    });
+  };
 
   // DNS-aware wrapper. The sync `validateBaseUrl` only inspects the literal
   // hostname string, so a public DNS name pointing at an internal address
@@ -17894,6 +17911,7 @@ export async function startServer({
       terminalTelemetryFallbackTimers.clear();
     };
     const cleanupDaemonBackgroundWork = () => {
+      stopEvidenceDelivery();
       clearTerminalTelemetryFallbackTimers();
       amrTerminalReportDelivery.stop();
       telemetry.disposeFatalHandlers();

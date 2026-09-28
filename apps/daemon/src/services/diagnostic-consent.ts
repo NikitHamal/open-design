@@ -4,7 +4,8 @@ import { join } from 'node:path';
 import type { AutomaticDiagnosticSource, LogSource } from '@open-design/diagnostics';
 
 interface Offset { size: number; ino: number; birthtime: number }
-interface ConsentState { enabled: boolean; since: number; offsets: Record<string, Offset> }
+const identity = (offset: Offset) => `${offset.ino}:${offset.birthtime}`;
+interface ConsentState { enabled: boolean; since: number; offsets: Record<string, Offset>; admitted?: Record<string, Offset> }
 
 /** File watermarks prevent a later opt-in from backfilling text produced while opted out. */
 export class DiagnosticConsentFence {
@@ -46,16 +47,67 @@ export class DiagnosticConsentFence {
     }
     if (this.state === generation) { this.persist(); this.needsBaseline = false; }
   }
-  async apply(sources: LogSource[]): Promise<AutomaticDiagnosticSource[]> {
-    const result: AutomaticDiagnosticSource[] = [];
+  /**
+   * Remembers logs re-created under a baselined path (Windows tunneling) as they are
+   * seen at startup, so a session without any incident still keeps its log admitted
+   * once the next launch rotates it to another path. Identities no longer present are
+   * dropped; `sources` must be the complete baseline set.
+   */
+  async observe(sources: LogSource[]): Promise<void> {
+    const generation = this.state;
+    if (!generation.enabled) return;
+    const admitted: Record<string, Offset> = {};
+    const known = generation.admitted ?? {};
     for (const source of sources) {
       const info = await stat(source.absolutePath).catch(() => null);
-      const offset = this.state.offsets[source.absolutePath];
+      if (this.state !== generation) return;
+      if (!info) continue;
+      const current = { size: 0, ino: info.ino, birthtime: info.birthtimeMs };
+      const recorded = generation.offsets[source.absolutePath];
+      const tunneled = !!recorded && recorded.birthtime === info.birthtimeMs && recorded.ino !== info.ino;
+      if (tunneled || known[identity(current)]) admitted[identity(current)] = current;
+    }
+    const before = Object.keys(known).sort().join(); const after = Object.keys(admitted).sort().join();
+    if (before !== after) { generation.admitted = admitted; this.persist(); }
+  }
+  async apply(sources: LogSource[]): Promise<AutomaticDiagnosticSource[]> {
+    const result: AutomaticDiagnosticSource[] = [];
+    const generation = this.state;
+    const baselined = Object.values(generation.offsets);
+    const admitted = Object.values(generation.admitted ?? {});
+    const updates: Record<string, Offset> = {};
+    for (const source of sources) {
+      const info = await stat(source.absolutePath).catch(() => null);
+      if (this.state !== generation) {
+        return sources.map((entry) => ({ ...entry, omitReason: this.state.enabled ? 'pre_consent_source' : 'consent_disabled' }));
+      }
+      const recorded = generation.offsets[source.absolutePath];
+      const sameFile = (offset: Offset | undefined) => !!info && !!offset && info.ino === offset.ino && info.birthtimeMs === offset.birthtime;
+      // A rotated log (latest.log -> previous.log) keeps its identity under a new path.
+      const offset = sameFile(recorded) ? recorded : baselined.find(sameFile);
       if (!this.state.enabled) result.push({ ...source, omitReason: 'consent_disabled' });
-      else if (info && offset && info.ino === offset.ino && info.birthtimeMs === offset.birthtime) {
-        result.push({ ...source, startOffset: offset.size });
+      // A missing file is not evidence of a consent boundary.
+      else if (!info) result.push({ ...source, omitReason: 'source_not_found' });
+      else if (info && offset) result.push({ ...source, startOffset: offset.size });
+      else if (info && admitted.some(sameFile)) {
+        const current = { size: 0, ino: info.ino, birthtime: info.birthtimeMs };
+        updates[identity(current)] = current;
+        result.push({ ...source, startOffset: 0 });
       } else if (info && info.birthtimeMs >= this.state.since) result.push(source);
-      else result.push({ ...source, omitReason: 'pre_consent_source' });
+      // Windows file-system tunneling gives a file re-created under a rotated name the
+      // creation time of the file that previously held that same path. Birth times
+      // from other paths are not proof of lineage.
+      else if (info && recorded && recorded.birthtime === info.birthtimeMs) {
+        const current = { size: 0, ino: info.ino, birthtime: info.birthtimeMs };
+        updates[identity(current)] = current;
+        result.push(source);
+      } else result.push({ ...source, omitReason: 'pre_consent_source' });
+    }
+    if (Object.keys(updates).length > 0) {
+      // Keep the original watermarks; admitted identities need no byte exclusion
+      // when encountered at a rotated path, including after a daemon restart.
+      generation.admitted = { ...generation.admitted, ...updates };
+      this.persist();
     }
     return result;
   }

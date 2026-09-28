@@ -40,7 +40,13 @@ Both metrics and content must be true at registration and each transport step.
 Malformed preferences fail closed. Disabling cancels transport, clears pending
 content and invalidates its leases. File watermarks prevent a later opt-in from
 uploading old text; an old source whose boundary cannot be proved is omitted and
-marked partial. Already transmitted remote bytes expire under the remote policy.
+marked partial. A baselined file keeps its offset when rotated to another path.
+The consent fence admits a replacement identity with an inherited creation time
+only when it matches the baseline for that same source path. It saves admitted
+identities in the consent state, recorded at each daemon start as well as when an
+incident is collected, so later rotations and daemon restarts can recognize them
+without accepting unrelated files with matching creation times.
+Already transmitted remote bytes expire under the remote policy.
 
 Pending content expires after 7 days; delivered local content after 24 hours. The
 queue budgets payloads plus serialized metadata within 1 GiB, reserving 100 MiB

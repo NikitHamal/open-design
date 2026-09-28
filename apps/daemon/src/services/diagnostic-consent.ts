@@ -36,6 +36,26 @@ export class DiagnosticConsentFence {
     this.needsBaseline = enabled;
     return true;
   }
+  /** Adds a boundary at the current size for existing files that no baseline covered yet. */
+  async extend(sources: LogSource[]): Promise<void> {
+    const generation = this.state;
+    let added = false;
+    for (const source of sources) {
+      if (this.state !== generation || !generation.enabled) return;
+      if (generation.offsets[source.absolutePath]) continue;
+      try {
+        const info = await stat(source.absolutePath);
+        // A file created after opting in is already admitted whole.
+        if (info.birthtimeMs >= generation.since) continue;
+        // A rotated or re-created log shares a baselined creation time; its boundary is
+        // decided from that baseline, never from its current size.
+        if (Object.values(generation.offsets).some((known) => known.birthtime === info.birthtimeMs)) continue;
+        generation.offsets[source.absolutePath] = { size: info.size, ino: info.ino, birthtime: info.birthtimeMs };
+        added = true;
+      } catch { /* a future file will be admitted only if created after the boundary */ }
+    }
+    if (added && this.state === generation) this.persist();
+  }
   async baseline(sources: LogSource[]): Promise<void> {
     const generation = this.state;
     for (const source of sources) {

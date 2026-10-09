@@ -471,6 +471,9 @@ export interface Dict {
   'settings.amrActivationBrowserFailedDescription': string;
   'settings.amrActivationOpen': string;
   'settings.amrCancelSignIn': string;
+  'settings.onboardingActivationPrompt': string;
+  'settings.onboardingActivationBrowserFailed': string;
+  'settings.onboardingActivationReopen': string;
   'settings.amrAccountStatus': string;
   'settings.amrConsole': string;
   'settings.amrBalance': string;
@@ -1254,6 +1257,9 @@ export interface Dict {
   'home.amrGateUnavailable': string;
   'home.bundledScenarioMissing': string;
   'entry.cloudCalloutBody': string;
+  'entry.cloudCreditsTitle': string;
+  'entry.cloudCreditsBody': string;
+  'entry.cloudCreditsCta': string;
   /** Name of the identity row on the local (signed-out) account dock. */
   'entry.localAccountName': string;
   'entry.cloudCalloutDismissAria': string;

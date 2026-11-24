@@ -199,7 +199,7 @@
    * (对应稿子的 `.fold .body { line-height: var(--lh-body) }`),
    * 组件名 / 卡片标题用 `--chat-t-lead`,阶段标题用 `--chat-t-head`。
    *
-   * ⚠ 和这条绑死的还有一处:`styles/base.css` 里 `JiduMono Pro` 的 `@font-face`
+   * ⚠ 和这条绑死的还有一处:`styles/base.css` 里 `Roboto Mono` 的 `@font-face`
    * 描述符。那个字体只有一个静态字重文件(`JiduMonoPro-Regular.otf`),稿子把
    * **同一份字节**的描述符写成 `500`。基线到 500 之后描述符也必须是 500,否则
    * 耗时 / 文件路径 / Hex / 改动量这些走 mono 的位置就是「请求 500、可用面只有

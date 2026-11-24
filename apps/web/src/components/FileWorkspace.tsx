@@ -4908,7 +4908,7 @@ function DesignSystemProjectPanel({
   const deleteShareStatus = deleteRequest && (!workspaceContext || deleteRequest.projectId !== projectId
     || deleteRequest.generation !== currentWorkspaceAccountGeneration()) ? 'error' : deleteHistoryStatus;
   const deleteActiveShareCount = deleteShareHistory
-    ? deleteShareHistory.publications.filter(publication => publication.status === 'active').length : null;
+    ? deleteShareHistory.publications.filter((publication: any) => publication.status === 'active').length : null;
   // Transient feedback for kit edits (upload / refresh / reset / delete) so an
   // action that previously fired-and-forgot now reports success or failure.
   const [kitToast, setKitToast] = useState<{ message: string; tone: DesignKitActionFeedbackTone } | null>(null);

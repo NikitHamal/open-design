@@ -2007,7 +2007,7 @@ export function EntryShell({
     identityUnavailable: Boolean(workspaceContextState.failure && !workspaceContextState.loading && !workspaceContextState.identityChangePending),
     onRetryIdentity: () => notifyWorkspaceContextRefresh(),
     allowHost: view !== 'onboarding' || (config.mode === 'daemon' && config.agentId === 'amr') || unconfiguredFirstRunCloud,
-    onExit: (count, context, completion) => {
+    onExit: (count: any, context: any, completion: any) => {
       if (!amrAccountId) return;
       if (unconfiguredFirstRunCloud) {
         onModeChange('daemon');

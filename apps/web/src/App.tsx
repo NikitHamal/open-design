@@ -1971,7 +1971,7 @@ function AppInner() {
     return () => window.clearTimeout(timer);
   }, [route, shareLoginReturn]);
   const onLoginUpdateRequestHandled = useCallback((nonce: number) => {
-    setLoginUpdateRequest((current) => current?.nonce === nonce ? null : current);
+    setLoginUpdateRequest((current: any) => current?.nonce === nonce ? null : current);
   }, []);
 
 

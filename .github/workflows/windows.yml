@@ -40,6 +40,12 @@ jobs:
           pnpm --filter @open-design/daemon exec tsc -p tsconfig.json --noEmit
           pnpm --filter @open-design/web exec tsc -b --noEmit
 
+      - name: Install NSIS
+        shell: pwsh
+        run: |
+          choco install nsis -y --no-progress
+          "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+
       - name: Package
         run: pnpm tools-pack win build --to all --portable
 

@@ -367,7 +367,7 @@ export interface CaptureDeps {
 // Fire a single PostHog capture over plain HTTPS. No-op without a key; never
 // throws; never blocks longer than `timeoutMs`.
 export async function captureStartupFailure(
-  args: {
+  _args: {
     posthogKey: string | null;
     posthogHost: string | null;
     distinctId: string;
@@ -375,10 +375,9 @@ export async function captureStartupFailure(
     properties: Record<string, unknown>;
     occurredAt?: string;
   },
-  deps: CaptureDeps = {},
+  _deps: CaptureDeps = {},
 ): Promise<void> {
-  const key = args.posthogKey?.trim();
-  if (!key) return; // fork builds / no key → no-op, zero network
+  return;
   const host = (args.posthogHost?.trim() || DEFAULT_HOST).replace(/\/+$/, "");
   const fetchImpl = deps.fetchImpl ?? fetch;
   const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;

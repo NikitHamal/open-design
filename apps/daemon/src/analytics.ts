@@ -185,13 +185,10 @@ export interface PosthogConfig {
 }
 
 export function readPosthogConfig(
-  env: NodeJS.ProcessEnv = process.env,
-  packagedRuntime?: boolean,
+  _env: NodeJS.ProcessEnv = process.env,
+  _packagedRuntime?: boolean,
 ): PosthogConfig | null {
-  const key = env.POSTHOG_KEY?.trim();
-  if (!key) return null;
-  const host = (env.POSTHOG_HOST?.trim() || DEFAULT_HOST).replace(/\/+$/, '');
-  return { key, host, env: readTelemetryEnvironment(env, packagedRuntime) };
+  return null;
 }
 
 /** One consented, bounded HTTP batch. A 2xx receipt is not indexing proof. */

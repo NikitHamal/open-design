@@ -562,32 +562,8 @@ function dispatch(item: BufferedSafetyEvent): void {
   send();
 }
 
-function sendSafetyPayload(destination: string, payload: unknown): void {
-  // `keepalive` ensures the request survives an immediate window unload —
-  // important for events that fire during navigation that are followed by
-  // a route change a millisecond later.
-  try {
-    void fetch(destination, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
-      keepalive: true,
-      // No credentials — PostHog ingest uses the public `phc_` key as the
-      // auth surface; cookies are irrelevant and sending them would just
-      // add CORS preflight friction.
-      credentials: 'omit',
-    }).catch(() => {
-      // Swallow the async rejection too. The synchronous try/catch below
-      // only guards against fetch throwing on a malformed argument; the
-      // returned promise rejects separately when the beacon can't reach
-      // PostHog (offline, ingest down). Left unhandled, that rejection is
-      // itself scooped up by the `unhandledrejection` listener above and
-      // re-reported as a `Failed to fetch` $exception — a self-amplifying
-      // loop where our own telemetry transport manufactures telemetry.
-    });
-  } catch {
-    // best-effort: safety telemetry must never propagate
-  }
+function sendSafetyPayload(_destination: string, _payload: unknown): void {
+  return;
 }
 
 // Frame-level source-map correlation.

@@ -1,6 +1,6 @@
 export const OPEN_DESIGN_TELEMETRY_RELAY_URLS = {
-  test: 'https://telemetry-test.open-design.ai/api/langfuse',
-  prod: 'https://telemetry.open-design.ai/api/langfuse',
+  test: '',
+  prod: '',
 } as const;
 
 const LEGACY_TEST_RELAY_ORIGIN = 'https://telemetry-selfhost.open-design.ai';

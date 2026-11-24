@@ -4598,20 +4598,8 @@ export function ChatPane({
                     description={displayError}
                     actions={(
                       <>
-                        {/* OPEND-2807: two standing actions and one runtime action. */}
-                        <RunErrorCardAction
-                          type="button"
-                          className="od-tooltip"
-                          variant="secondary"
-                          data-testid="chat-error-contact-support"
-                          data-tooltip={t('chat.runError.contactSupportCta')}
-                          onClick={() => setSupportDialogOpen(true)}
-                        >
-                          <Icon name="headset" size={11} />
-                          {t('chat.runError.contactSupportCta')}
-                        </RunErrorCardAction>
                         <ExportLogsAction />
-                        {showCloudRetry && retryAssistant && onRetry ? (
+                        {retryAssistant && onRetry ? (
                           <RunErrorCardAction
                             type="button"
                             variant="primary"
@@ -4624,40 +4612,6 @@ export function ChatPane({
                           >
                             <Icon name="refresh" size={11} />
                             {t(retryLabelKey)}
-                          </RunErrorCardAction>
-                        ) : null}
-                        {showCloudSwitchCta ? (
-                          <RunErrorCardAction
-                            type="button"
-                            variant="primary"
-                            data-testid="chat-error-switch-to-cloud"
-                            // `handleSwitchToAmrAndRetry` 头一行就是同一道门控;
-                            // 挡住时这颗按钮点下去连设置面板都不会开。
-                            disabled={recoveryActionsDisabled}
-                            onClick={() => {
-                              trackRunFailedToastGoAmrClick(analytics.track, {
-                                page_name: 'chat_panel',
-                                area: 'chat_panel',
-                                element: 'go_amr',
-                              });
-                              recordAmrEntry(
-                                analytics.track,
-                                'chat_error_switch_retry_card',
-                                new Date(),
-                                { metricsConsent: config?.telemetry?.metrics === true },
-                              );
-                              if (retryAssistant && onSwitchToAmrAndRetry) {
-                                trackRecoveryClick(retryAssistant, 'switch_runtime_retry', {
-                                  agentProviderId: 'amr',
-                                  modelId: config?.agentModels?.amr?.model?.trim() || 'default',
-                                });
-                                onSwitchToAmrAndRetry(retryAssistant);
-                              } else {
-                                onOpenAmrSettings?.();
-                              }
-                            }}
-                          >
-                            {t('chat.amrCard.switchCta')}
                           </RunErrorCardAction>
                         ) : null}
                       </>

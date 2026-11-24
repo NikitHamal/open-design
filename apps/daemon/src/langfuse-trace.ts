@@ -467,26 +467,9 @@ export function readLangfuseConfig(
  * direct Langfuse credentials second for local smoke tests, disabled last.
  */
 export function readTelemetrySinkConfig(
-  env: NodeJS.ProcessEnv = process.env,
+  _env: NodeJS.ProcessEnv = process.env,
 ): TelemetrySinkConfig | null {
-  const relayUrl = env.OPEN_DESIGN_TELEMETRY_RELAY_URL?.trim();
-  if (relayUrl) {
-    return {
-      kind: 'relay',
-      relayUrl: normalizeOpenDesignTelemetryRelayUrl(relayUrl),
-      timeoutMs: parsePositiveInt(
-        env.OPEN_DESIGN_TELEMETRY_TIMEOUT_MS ?? env.LANGFUSE_TIMEOUT_MS,
-        DEFAULT_FETCH_TIMEOUT_MS,
-      ),
-      retries: parseNonNegativeInt(
-        env.OPEN_DESIGN_TELEMETRY_RETRIES ?? env.LANGFUSE_RETRIES,
-        DEFAULT_FETCH_RETRIES,
-      ),
-    };
-  }
-
-  const config = readLangfuseConfig(env);
-  return config == null ? null : { kind: 'langfuse', ...config };
+  return null;
 }
 
 /**
@@ -513,32 +496,10 @@ function isVelaTelemetryEnabled(env: NodeJS.ProcessEnv): boolean {
  * re-scopes it with the same account hash as the original run batch.
  */
 export function readRunTelemetrySinkConfig(
-  env: NodeJS.ProcessEnv = process.env,
-  configuredEnv: Record<string, string> = {},
+  _env: NodeJS.ProcessEnv = process.env,
+  _configuredEnv: Record<string, string> = {},
 ): RunTelemetrySinkConfig | null {
-  if (isVelaTelemetryEnabled(env)) {
-    const context = readVelaControlApiContext(env, configuredEnv);
-    const controlKey = context?.controlKey?.trim() ?? '';
-    if (context && controlKey) {
-      return {
-        kind: 'vela',
-        apiUrl: (context.apiUrl.trim() || 'https://amr-api.open-design.ai').replace(
-          /\/+$/,
-          '',
-        ),
-        controlKey,
-        timeoutMs: parsePositiveInt(
-          env.OPEN_DESIGN_TELEMETRY_TIMEOUT_MS ?? env.LANGFUSE_TIMEOUT_MS,
-          DEFAULT_FETCH_TIMEOUT_MS,
-        ),
-        retries: parseNonNegativeInt(
-          env.OPEN_DESIGN_TELEMETRY_RETRIES ?? env.LANGFUSE_RETRIES,
-          DEFAULT_FETCH_RETRIES,
-        ),
-      };
-    }
-  }
-  return readTelemetrySinkConfig(env);
+  return null;
 }
 
 /**

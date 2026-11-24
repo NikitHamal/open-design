@@ -5,6 +5,7 @@ import {
   resolveBrowserGatewayConfig,
   streamCustom,
 } from './catalog.js';
+import { streamGeminiWeb, streamQwenApp } from './webscrapers.js';
 
 const CHROME_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36';
@@ -817,6 +818,12 @@ async function streamUnikey(
         return;
       case 'yqcloud':
         await streamYqCloud(req, wrappedDelta, signal);
+        return;
+      case 'qwen':
+        await streamQwenApp(req, wrappedDelta, signal);
+        return;
+      case 'geminiweb':
+        await streamGeminiWeb(req, wrappedDelta, signal);
         return;
       default: {
         const gw = resolveBrowserGatewayConfig(req.provider, req.model);

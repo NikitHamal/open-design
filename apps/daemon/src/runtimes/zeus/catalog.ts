@@ -836,7 +836,7 @@ export function reasoningTiers(model?: ModelInfo | null): Effort[] {
 export function clampEffort(effort: Effort, tiers: Effort[]): Effort {
   if (!tiers.length || tiers.includes(effort)) return effort;
   const want = EFFORT_ORDER.indexOf(effort);
-  return [...tiers].sort((a, b) => Math.abs(EFFORT_ORDER.indexOf(a) - want) - Math.abs(EFFORT_ORDER.indexOf(b) - want))[0];
+  return [...tiers].sort((a, b) => Math.abs(EFFORT_ORDER.indexOf(a) - want) - Math.abs(EFFORT_ORDER.indexOf(b) - want))[0] ?? effort;
 }
 
 export function fmtCtx(n?: number, verified?: boolean): string {
@@ -845,7 +845,7 @@ export function fmtCtx(n?: number, verified?: boolean): string {
   return verified ? v : `~${v}`;
 }
 
-export function currentModel(providerId: string, modelId: string): { provider: ProviderMeta; model?: ModelInfo } {
+export function currentModel(providerId: string, modelId: string): { provider: ProviderMeta; model?: ModelInfo | undefined } {
   const provider = findProvider(providerId);
   return { provider, model: provider.models.find((m) => m.id === modelId) };
 }
@@ -1232,6 +1232,7 @@ export function resolveBrowserGatewayConfig(
         : "unsloth/Qwen3.5-4B-GGUF:Q6_K"
       : modelId;
 
+  if (!cfg) throw new Error(`No keyless gateway configured for provider ${providerId}`);
   return {
     baseUrl: cfg.baseUrl,
     apiKey: cfg.apiKey,

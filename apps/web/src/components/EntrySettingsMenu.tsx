@@ -285,7 +285,7 @@ export function EntrySettingsMenu({
             <SocialShareGrid
               share={openDesignShare ?? fallbackOpenDesignShare}
               className="entry-settings-social-share"
-              onShare={(platform) => {
+              onShare={(platform: any) => {
                 trackSettingsPopoverClick(analytics.track, {
                   page_name: pageName,
                   area: 'settings_popover',

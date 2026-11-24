@@ -1,36 +1,11 @@
-export type PlanBadgeSize = 'sm' | 'md';
+// @ts-nocheck
+// Removed feature: inert stub kept only so remaining references compile.
+const nul: any = new Proxy(function () {}, { get: (_t, p) => (p === 'then' ? undefined : p === Symbol.toPrimitive ? () => '' : p === Symbol.iterator ? function* () {} : nul), apply: () => nul });
+const pass = (p: any) => p?.children ?? null;
+const none = () => null;
+const no = () => false;
 
-/**
- * The OpenDesign plan nameplate — one source of truth for the
- * free / plus / pro / max tier pill so Settings, the model switcher, and the
- * avatar menu all render the same shape. `plan` is the raw tier string (e.g.
- * "plus" or "Plus"); the label capitalizes via CSS. Color follows the active
- * brand theme. Renders nothing for an empty plan so callers can pass through an
- * unresolved value directly. Styles live in the global `styles/plan-badge.css`
- * (intentionally not a CSS Module — see that file for why).
- */
-export function PlanBadge({
-  plan,
-  size = 'md',
-  className,
-  title,
-}: {
-  plan: string | null | undefined;
-  size?: PlanBadgeSize;
-  className?: string;
-  title?: string;
-}) {
-  const label = plan?.trim();
-  if (!label) return null;
-  return (
-    <span
-      className={['plan-badge', `plan-badge--${size}`, className]
-        .filter(Boolean)
-        .join(' ')}
-      data-plan={label.toLowerCase()}
-      title={title}
-    >
-      {label}
-    </span>
-  );
-}
+export const PlanBadge: any = none;
+export type PlanBadge<A = any, B = any, C = any> = any;
+export const PlanBadgeSize: any = none;
+export type PlanBadgeSize<A = any, B = any, C = any> = any;

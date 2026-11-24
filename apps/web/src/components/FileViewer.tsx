@@ -17826,7 +17826,7 @@ function HtmlViewer({
                         close: t('fileViewer.shareGuide.close'),
                         saveFailed: t('fileViewer.shareGuide.preferenceSaveFailed'),
                       }}
-                      onObserve={event => observeAnalytics(() => {
+                      onObserve={(event: any) => observeAnalytics(() => {
                         const identity = {
                           page_name: 'artifact' as const,
                           area: 'share_guide' as const,

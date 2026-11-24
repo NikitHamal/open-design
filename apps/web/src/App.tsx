@@ -5817,7 +5817,7 @@ function AppInner() {
   } else if (route.kind === 'community') {
     appMain = (
       <CommunityView
-        onRemixTemplate={({ templateId, prompt }) => {
+        onRemixTemplate={({ templateId, prompt }: any) => {
           // Remix carries the template's PROJECT along, not just its prompt:
           // duplicate the plugin's example artifact into a fresh project,
           // seed the composer with the template prompt, then open it on the
@@ -5865,7 +5865,7 @@ function AppInner() {
             }
           })();
         }}
-        onUsePrompt={(target) => {
+        onUsePrompt={(target: any) => {
           seedHomeComposerPrompt(target.prompt);
           stashHomePromptHandoff(createPluginUseHandoff(Date.now(), target.templateId, {
             action: 'use',
@@ -5874,7 +5874,7 @@ function AppInner() {
           }));
           navigate({ kind: 'home', view: 'home' });
         }}
-        onUsePlugin={(record, action, target) => {
+        onUsePlugin={(record: any, action: any, target: any) => {
           stashHomePromptHandoff(createPluginUseHandoff(Date.now(), record.id, {
             action,
             chipId: target.chipId,

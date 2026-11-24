@@ -1496,7 +1496,7 @@ export function EntryTopRightCluster({
                     consoleOrigin={workspaceQuotaStatus?.consoleOrigin}
                     badgeTier={planTier}
                     planLabel={tierLabel}
-                    onNavigate={(action) => {
+                    onNavigate={(action: any) => {
                       trackAccountAction(action);
                       setCreditsPanelOpen(false);
                     }}

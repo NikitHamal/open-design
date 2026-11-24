@@ -107,7 +107,7 @@ export function useRegistrationInvite(props: Props) {
   if (principal && !alreadyComplete && !visible && errorFor !== principal && settledFor !== principal) return <div className={styles.loading}><CenteredLoader label={t('entry.loadingWorkspace')} /></div>;
   if (!visible && (!principal || errorFor !== principal)) return null;
   return <>
-    {visible ? <OnboardingInviteView key={principal} workspaceContext={candidate.context} onFinish={(count, completion) => void finish(count, completion)} /> : null}
+    {visible ? <OnboardingInviteView key={principal} workspaceContext={candidate.context} onFinish={(count: any, completion: any) => void finish(count, completion)} /> : null}
     {principal && errorFor === principal ? <div className={styles.recovery} role="alert"><p>{t('invite.error.generic')}</p><Button onClick={() => pendingCount.current === null ? setAttempt(n => n + 1) : void finish(pendingCount.current, pendingCompletion.current)}>{t('invite.error.retry')}</Button></div> : null}
   </>;
 }

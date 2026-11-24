@@ -870,7 +870,7 @@ export function HomeView({
     if (!detailsRecord) return null;
     return (
       buildCommunityTemplates(plugins, locale, t, workspaceContext)
-        .find((template) => template.id === detailsRecord.id) ?? null
+        .find((template: any) => template.id === detailsRecord.id) ?? null
     );
   }, [detailsRecord, plugins, locale, t, workspaceContext]);
   // Same synchronous single-flight gate the Community remix path uses: the

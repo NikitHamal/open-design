@@ -2130,7 +2130,7 @@ export function EntryShell({
     skillsLoading,
     connectors,
     promptTemplates,
-    deepSeekV4FlashCampaignAudience: null,
+    deepSeekV4FlashCampaignAudience: undefined,
     onDeepSeekV4FlashCampaignUseNow: applyDeepSeekCampaignModel,
     deepSeekV4FlashCampaignMetricsConsent: false,
     deepSeekV4FlashCampaignInstallationId: null,
@@ -2332,7 +2332,7 @@ export function EntryShell({
             ) : null}
             {view === 'community' ? (
               <CommunityView
-                onRemixTemplate={({ templateId, prompt }) => {
+                onRemixTemplate={({ templateId, prompt }: any) => {
                   // Remix carries the template's PROJECT along, not just its
                   // prompt: duplicate the plugin's example artifact into a
                   // fresh project (the same daemon flow as the plugin
@@ -2384,7 +2384,7 @@ export function EntryShell({
                     }
                   })();
                 }}
-                onUsePrompt={(target) => {
+                onUsePrompt={(target: any) => {
                   // Hands off to Home (OPEND-2793, product decision B): the
                   // community view no longer docks a composer at its foot —
                   // that bar had no relation to the gallery, the filters or
@@ -2404,7 +2404,7 @@ export function EntryShell({
                 // same Home hand-off the plugin library uses, so the plugin
                 // becomes the composer's active driver instead of only seeding
                 // prompt text.
-                onUsePlugin={(record, action, target) => {
+                onUsePlugin={(record: any, action: any, target: any) => {
                   usePluginFromLibrary(record, action, {
                     chipId: target.chipId,
                     projectKind: target.projectKind,

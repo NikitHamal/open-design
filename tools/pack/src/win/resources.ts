@@ -22,7 +22,6 @@ async function createResourceTreeCacheKey(config: ToolPackConfig, workspaceBuild
       ? null
       : await resolveOptionalVelaCliOpenCodeCompanionTree(velaCliBin);
   return hashJson({
-    assetsCommunityPets: await hashPath(join(config.workspaceRoot, "assets", "community-pets")),
     assetsFrames: await hashPath(join(config.workspaceRoot, "assets", "frames")),
     craft: await hashPath(join(config.workspaceRoot, "craft")),
     designSystems: await hashPath(join(config.workspaceRoot, "design-systems")),
@@ -30,7 +29,6 @@ async function createResourceTreeCacheKey(config: ToolPackConfig, workspaceBuild
     node: "win.resource-tree",
     pluginOfficial: await hashPath(join(config.workspaceRoot, "plugins", "_official")),
     pluginPreviews: await hashPath(join(config.workspaceRoot, "data", "plugin-previews")),
-    pluginRegistry: await hashPath(join(config.workspaceRoot, "plugins", "registry")),
     promptTemplates: await hashPath(join(config.workspaceRoot, "prompt-templates")),
     schemaVersion: RESOURCE_TREE_CACHE_SCHEMA_VERSION,
     skills: await hashPath(join(config.workspaceRoot, "skills")),

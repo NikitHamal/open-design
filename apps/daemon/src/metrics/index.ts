@@ -31,7 +31,7 @@ import {
   Gauge,
   Histogram,
   register,
-} from 'prom-client';
+} from '../shims/prom-client.js';
 
 export const critiqueRunsTotal = new Counter({
   name: 'open_design_critique_runs_total',

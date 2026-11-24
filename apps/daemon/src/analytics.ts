@@ -11,7 +11,7 @@ import { MEDIA_STOCK_BATCH_LIMITS } from '@open-design/contracts/analytics';
 
 import crypto from 'node:crypto';
 import os from 'node:os';
-import { PostHog } from 'posthog-node';
+import { PostHog } from './shims/posthog-node.js';
 import type { Request } from 'express';
 import {
   ANALYTICS_HEADER_DEVICE_ID,

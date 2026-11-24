@@ -1,4 +1,4 @@
-import { Counter, Histogram, register } from 'prom-client';
+import { Counter, Histogram, register } from '../shims/prom-client.js';
 
 import type { WorkspaceAuthorityCacheMode } from '../collab/workspace-authority-health.js';
 

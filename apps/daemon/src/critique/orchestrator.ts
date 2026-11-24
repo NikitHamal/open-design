@@ -28,7 +28,7 @@ import {
   OversizeBlockError,
   MissingArtifactError,
 } from './errors.js';
-import { trace, SpanStatusCode } from '@opentelemetry/api';
+import { trace, SpanStatusCode } from '../shims/otel-api.js';
 import {
   critiqueCompositeScore,
   critiqueInterruptedTotal,

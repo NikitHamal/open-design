@@ -4,7 +4,7 @@
 // fire-and-forget: capture failures must never propagate to product code.
 
 import { getOpenDesignHost } from '@open-design/host';
-import type { PostHog } from 'posthog-js';
+import type { PostHog } from './posthog-shim';
 import {
   EVENT_SCHEMA_VERSION,
   type AnalyticsClientType,
@@ -285,7 +285,7 @@ export async function getAnalyticsClient(
         (typeof cfg.installationId === 'string' && cfg.installationId) ||
         context.anonymousId;
       resolvedDeviceId = distinctId;
-      const mod = await import('posthog-js');
+      const mod = await import('./posthog-shim');
       const posthog = mod.default;
       const cfgKey = cfg.key;
       const cfgHost = cfg.host;
@@ -382,7 +382,7 @@ export async function getAnalyticsClient(
         loaded: (instance) => {
           // Hand the chat-observability correlation block its replay-session
           // reader. This is the ONLY place it can come from: we load
-          // posthog-js through `await import('posthog-js')`, and the ESM
+          // posthog-js through `await import('./posthog-shim')`, and the ESM
           // build — unlike the landing page's `array.js` snippet — never
           // publishes itself as `window.posthog`. Without this line every
           // `replay_session_id` on a `client_chat_*` event is silently

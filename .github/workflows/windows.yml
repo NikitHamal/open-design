@@ -1,0 +1,63 @@
+name: windows
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      HUSKY: "0"
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck daemon and web
+        shell: bash
+        run: |
+          pnpm --filter @open-design/daemon exec tsc -p tsconfig.json --noEmit
+          pnpm --filter @open-design/web exec tsc -b --noEmit
+
+      - name: Package
+        run: pnpm tools-pack win build --to all --portable
+
+      - name: Collect artifacts
+        shell: bash
+        run: |
+          mkdir -p out
+          find .tmp/tools-pack/out/win -maxdepth 4 \( -name "*.exe" -o -name "*.zip" \) -not -path "*win-unpacked*" -exec cp {} out/ \;
+          ls -lh out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opendesigns-windows
+          path: out/*
+          if-no-files-found: error
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*

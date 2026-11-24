@@ -49,6 +49,14 @@ jobs:
       - name: Package
         run: pnpm tools-pack win build --to all --portable
 
+      - name: Size report
+        shell: bash
+        continue-on-error: true
+        run: |
+          U=$(find .tmp/tools-pack/out/win -type d -name win-unpacked | head -1)
+          echo "unpacked: $U"; du -sm "$U"
+          du -m --max-depth=4 "$U/resources" | sort -rn | head -40
+
       - name: Collect artifacts
         shell: bash
         run: |

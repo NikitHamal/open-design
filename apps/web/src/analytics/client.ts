@@ -379,7 +379,7 @@ export async function getAnalyticsClient(
           recordCrossOriginIframes: false,
         },
 
-        loaded: (instance) => {
+        loaded: (instance: PostHog) => {
           // Hand the chat-observability correlation block its replay-session
           // reader. This is the ONLY place it can come from: we load
           // posthog-js through `await import('./posthog-shim')`, and the ESM

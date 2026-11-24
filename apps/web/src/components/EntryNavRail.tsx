@@ -2633,87 +2633,8 @@ export function EntryNavRail({
             {/* A01 does not add an account/message-centre row while signed out. */}
           </div>
         )}
-        {/* Bottom of the nav column: the host `EntryTopRightCluster` portals
-            the account module into. `display: contents` keeps the account
-            dock itself a flex child of this group, so its own `order: 99` +
-            `margin-top: auto` still push it below the nav items. */}
-        {isHome && !referralCompact ? <ReferralEntry /> : null}
-        {context ? <div ref={setAccountHost} className="entry-nav-rail__account-host" /> : null}
       </div>
-      {/* Signed in, the social links ride the account dock above the identity
-          row (see `EntryTopRightCluster`), so the footer only renders when it
-          has a notice to show — an empty shell here read as a dead white
-          strip under the account row. Signed out keeps the sign-in card and
-          existing community links without a second identity row. */}
-      {context ? (
-        footerNotice ? <div className="entry-nav-rail__footer">{footerNotice}</div> : null
-      ) : (
-        <div className="entry-nav-rail__footer">
-          {footerNotice}
-          {/* A01 keeps the signed-out footer focused on its sign-in card.
-              Settings already has a navigation entry; do not add a duplicate
-              local identity or message-centre row above the card. Existing
-              community links remain outside this local-row correction. */}
-          <div
-            className="entry-nav-rail__account-dock entry-nav-rail__account-dock--local"
-            data-testid="entry-nav-local-account-dock"
-          >
-            <RailSocialRow page={analyticsPage} dimensions={workspaceDimensions} />
-          </div>
-        </div>
-      )}
       </div>
-
-      {/* Keep signed-out announcement delivery and unread polling mounted.
-          Signed-in mounts move into `EntryTopRightCluster`; context-gating
-          both sides keeps exactly one panel (and one poller) alive. */}
-      {context ? null : (
-        <MessageCenter
-          hideTrigger
-          open={messageCenterOpen}
-          onOpenChange={setMessageCenterOpen}
-          onOpenNotificationSettings={onOpenSettings ? () => onOpenSettings('notifications') : undefined}
-          priorityAnnouncementActive={priorityAnnouncementActive}
-          onPriorityAnnouncementPendingChange={onPriorityAnnouncementPendingChange}
-          priorityAnnouncementCurrentPlanId={priorityAnnouncementCurrentPlanId}
-          priorityAnnouncementAmrProfile={priorityAnnouncementAmrProfile}
-          priorityAnnouncementMetricsConsent={priorityAnnouncementMetricsConsent}
-        />
-      )}
-
-      <InviteDialog
-        open={inviteOpen}
-        onClose={() => setInviteOpen(false)}
-        workspaceContext={context}
-        canAssignRoles={context?.role === 'owner'}
-        entryFrom="workspace_switcher"
-      />
-      {/* Top-right chrome cluster: campaign badge (slot) + credits pill,
-          mounted into the tabs chrome's no-drag actions host so Electron
-          includes it in the first native hit map; the account module it owns
-          portals into `accountHost` at the foot of this rail. Extracted so the
-          project route can mount the same cluster without the rail (see
-          `EntryTopRightCluster`). */}
-      <EntryTopRightCluster
-        amrProfile={priorityAnnouncementAmrProfile}
-        page={analyticsPage}
-        context={context}
-        billing={billing}
-        billingResponse={billingResponse}
-        balanceUsd={balanceUsd}
-        leadingSlot={topRightSlot}
-        inviteSlot={inviteSlot}
-        updaterSlot={updaterSlot}
-        accountHost={accountHost}
-        onOpenSettings={onOpenSettings}
-        onSignedOut={onSignedOut}
-        priorityAnnouncementActive={priorityAnnouncementActive}
-        onPriorityAnnouncementPendingChange={onPriorityAnnouncementPendingChange}
-        priorityAnnouncementCurrentPlanId={priorityAnnouncementCurrentPlanId}
-        priorityAnnouncementAmrProfile={priorityAnnouncementAmrProfile}
-        workspaceQuotaStatus={workspaceQuotaStatus}
-        priorityAnnouncementMetricsConsent={priorityAnnouncementMetricsConsent}
-      />
     </nav>
     </>
   );

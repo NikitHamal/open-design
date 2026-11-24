@@ -20,14 +20,14 @@ type RecoverableFont = {
 const RECOVERABLE_FONTS: RecoverableFont[] = [
   { family: 'remixicon', url: '/remixicon.ttf' },
   {
-    family: 'Albert Sans',
-    url: '/fonts/AlbertSans-VariableFont_wght.ttf',
-    descriptors: { weight: '100 900' },
+    family: 'Google Sans Flex',
+    url: '/fonts/google-sans-flex.woff2',
+    descriptors: { weight: '1 1000' },
   },
   {
-    family: 'Albert Sans',
-    url: '/fonts/AlbertSans-Italic-VariableFont_wght.ttf',
-    descriptors: { weight: '100 900', style: 'italic' },
+    family: 'Roboto Mono',
+    url: '/fonts/roboto-mono.woff2',
+    descriptors: { weight: '400 600' },
   },
 ];
 

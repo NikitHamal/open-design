@@ -87,15 +87,18 @@ export const DEFAULT_CONFIG: AppConfig = {
   apiProtocolConfigs: {},
   configMigrationVersion: CONFIG_MIGRATION_VERSION,
   apiProviderBaseUrl: 'https://api.anthropic.com',
-  agentId: null,
+  agentId: 'zeus',
   skillId: null,
   designSystemId: null,
-  onboardingCompleted: false,
+  onboardingCompleted: true,
   theme: FORCED_APP_THEME,
   accentColor: DEFAULT_ACCENT_COLOR,
   mediaProviders: {},
   composio: {},
-  agentModels: {},
+  agentModels: {
+    zeus: { model: 'mercury3/mercury-3', reasoning: 'medium' },
+    amr: { model: 'mercury3/mercury-3', reasoning: 'medium' },
+  },
   agentCliEnv: {},
   agentCliEnvIntent: {},
   pet: DEFAULT_PET,
@@ -103,16 +106,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   orbit: DEFAULT_ORBIT,
   projectLocations: [],
   defaultProjectLocationId: 'default',
-  // Telemetry defaults to ON so fresh-install users emit onboarding /
-  // ui_click events from the first frame. The disclosure modal still
-  // appears after `onboardingCompleted` flips, and Settings → Privacy
-  // remains the one-click opt-out. Without these defaults the gate at
-  // `daemon/src/analytics.ts` (`if (telemetry?.metrics !== true) return`)
-  // dropped every event fired during onboarding because no consent
-  // existed yet — observed live on the prerelease.10 QA run, which left
-  // zero `page_view pn=onboarding` rows on PostHog despite the user
-  // completing the flow.
-  telemetry: { metrics: true, content: true },
+  telemetry: { metrics: false, content: false },
 };
 
 /** Well-known providers with pre-filled base URLs. */
@@ -803,11 +797,18 @@ export function loadConfig(): AppConfig {
       merged.baseUrl = resolveFixedOriginBaseUrl(merged.apiProtocol, merged.baseUrl);
     }
 
+    merged.onboardingCompleted = true;
+    if (!merged.agentId || merged.agentId === 'amr') {
+      merged.agentId = 'zeus';
+    }
+    if (!merged.agentModels?.zeus?.model) {
+      merged.agentModels = {
+        ...(merged.agentModels ?? {}),
+        zeus: { model: 'mercury3/mercury-3', reasoning: 'medium' },
+      };
+    }
+
     if (migratedConfig || downgradedUnsupportedChatProtocol) {
-      // Best-effort re-persist of the migrated / downgraded config. A localStorage
-      // write failure here (quota exceeded, private-mode storage disabled) must not
-      // fall through to the outer catch and discard the valid config we just
-      // parsed — that would silently reset the user to defaults for the session.
       try {
         saveConfig(merged);
       } catch {
@@ -1079,11 +1080,10 @@ export function saveConfig(config: AppConfig): void {
  * save path; this is its read-path counterpart.
  */
 function ratchetOnboardingCompleted(
-  local: AppConfig['onboardingCompleted'],
-  daemon: AppConfigPrefs['onboardingCompleted'],
+  _local: AppConfig['onboardingCompleted'],
+  _daemon: AppConfigPrefs['onboardingCompleted'],
 ): AppConfig['onboardingCompleted'] {
-  if (local === true || daemon === true) return true;
-  return daemon != null ? daemon : local;
+  return true;
 }
 
 export function mergeDaemonConfig(

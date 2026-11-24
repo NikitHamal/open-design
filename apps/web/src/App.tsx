@@ -375,18 +375,10 @@ const AGENT_FOCUS_REFRESH_THROTTLE_MS = 10_000;
  * rather than "what just happened" keeps it from being re-decided mid-session.
  */
 export function shouldRouteToFirstRunOnboarding(
-  config: AppConfig,
-  pathname: string,
+  _config: AppConfig,
+  _pathname: string,
 ): boolean {
-  if (config.onboardingCompleted === true) return false;
-  if (
-    pathname.startsWith('/projects/')
-    || pathname.startsWith('/collab-demo')
-    || pathname.startsWith('/community')
-  ) {
-    return false;
-  }
-  return true;
+  return false;
 }
 
 function workspaceProjectListViewForRoute(route: Route): WorkspaceProjectListView {
@@ -6277,106 +6269,12 @@ function AppInner() {
           onDuplicateProject={handleDuplicateProject}
           onDeleteProject={handleDeleteProject}
         />
-        {/* Avatar + credits keep their home-view spot (the top-right actions
-            host inside the tabs chrome) while a project tab is open, even
-            though EntryShell — the cluster's usual owner — is unmounted here.
-            Home and the other entry views mount theirs through EntryNavRail;
-            the routes are mutually exclusive, so exactly one is on screen. */}
-        {route.kind === 'project' ? (
-          <WorkspaceTopRightAccountCluster
-            amrProfile={amrProfileForConfig(config)}
-            workspaceQuotaStatus={amrLoginStatus}
-            onOpenSettings={openSettings}
-            onSignedOut={handleActiveCloudSignOut}
-            updaterSlot={
-              <UpdaterPopup
-                allowSilentUpdates={config.allowSilentUpdates}
-                silentUpdatePreferenceReady={daemonAppConfigReady}
-                onAllowSilentUpdatesChange={handleSilentUpdatePreferenceChange}
-              />
-            }
-            workspaceContextOverride={
-              activeProject?.workspaceId
-                ? activeProjectWorkspaceContext
-                : undefined
-            }
-            workspaceContextLoading={
-              activeProject?.workspaceId
-                ? projectRouteWorkspaceContext.loading
-                : undefined
-            }
-            amrLoggedIn={amrLoginStatus?.loggedIn ?? null}
-            amrAccountPlan={
-              amrLoginStatus?.account?.plan?.trim()
-              || amrLoginStatus?.user?.plan?.trim()
-              || null
-            }
-            amrAccountId={amrLoginStatus?.user?.id ?? amrLoginStatus?.credentialRevision ?? null}
-            metricsConsent={config.telemetry?.metrics === true}
-            installationId={config.installationId}
-          />
-        ) : null}
-        {route.kind === 'project'
-          && activeProjectWorkspaceContext
-          && projectRouteWorkspaceContext.failure === 'unavailable' ? (
-          <ProjectWorkspaceRecoveryTip />
-        ) : null}
         <div className="workspace-shell__body">
           {appMain}
         </div>
       </div>
-      {clientType === 'desktop' ? null : (
-        <PetOverlay
-          pet={config.pet?.enabled ? config.pet : undefined}
-          taskCenter={petTaskCenter}
-          onOpenProject={handleOpenProject}
-          dockLine
-        />
-      )}
-      {/* Every placement these hosts may render is a home placement
-          (`opend.home.*`), so the home view is where they belong: not over a
-          project workbench, not over another entry tab, and — since account
-          restoration can finish while login is still up — not over onboarding. */}
-      {route.kind === 'home' && route.view === 'home' && (
-        <>
-          <TestCampaignModal
-            authenticated={isAmrSessionAuthenticated(amrLoginStatus)}
-            sessionSubject={amrLoginStatus?.user?.id ?? null}
-          />
-          <ProductionCampaignModal
-            authenticated={isAmrSessionAuthenticated(amrLoginStatus)}
-            sessionSubject={amrLoginStatus?.user?.id ?? null}
-          />
-        </>
-      )}
       <TooltipLayer />
       <UpdateDialog />
-      {/* Mounted at shell level, outside the route views, so a survey armed by
-          an export inside a project stays on screen when the user navigates
-          back to home. */}
-      <ExperienceSurvey
-        metricsConsent={config.telemetry?.metrics === true}
-        onExposure={() => trackExperienceSurveyShown(analytics.track)}
-        onDismiss={() => trackExperienceSurveyDismissed(analytics.track)}
-        onSubmit={(answers) => trackExperienceSurveySent(analytics.track, answers)}
-      />
-      <AmrArtifactUpgradeGate
-        cloudModelSelected={config.mode === 'daemon' && config.agentId === 'amr'}
-        homeVisible={route.kind === 'home' && route.view === 'home'}
-        activeProjectId={route.kind === 'project' ? route.projectId : null}
-        activeConversationId={
-          route.kind === 'project' ? route.conversationId ?? null : null
-        }
-        plan={resolvedAmrPlan}
-        planResolved={
-          amrLoginStatus !== null
-          && (!isAmrSessionAuthenticated(amrLoginStatus) || resolvedAmrPlan !== null)
-        }
-        profile={amrLoginStatus?.profile ?? null}
-        metricsConsent={config.telemetry?.metrics === true}
-        workspaceId={amrUpgradeWorkspaceContext?.workspaceId}
-        installationId={config.installationId}
-      />
       <AnimatePresence>
       {settingsOpen ? (
         renderSettingsSurface('modal')
@@ -6398,8 +6296,6 @@ function AppInner() {
             ),
         })}
       />
-      <DeletedShareNotices state={deletedShares} />
-      {amrWebOpenFailed ? <Toast message={t('account.openFailed')} role="alert" tone="error" onDismiss={()=>setAmrWebOpenFailed(false)} /> : null}
       {workingDirError ? (
         <Toast
           message={workingDirError}
@@ -6409,8 +6305,6 @@ function AppInner() {
       ) : null}
       {projectCreateError ? (
         <Toast
-          // 「标题\n正文」两行的定稿(S28a / S03,见 `homeCreateFailureNotice`)拆成
-          // Toast 的标题 + 正文;单行的照旧只有标题。
           message={projectCreateError.split('\n')[0] ?? projectCreateError}
           details={projectCreateError.includes('\n') ? projectCreateError.slice(projectCreateError.indexOf('\n') + 1) : null}
           role="alert"
@@ -6418,21 +6312,6 @@ function AppInner() {
           onDismiss={() => setProjectCreateError(null)}
         />
       ) : null}
-      {homeConcurrencyRejection && route.kind === 'home'
-        && homeConcurrencyRejection.accountGeneration === currentWorkspaceAccountGeneration() ? (
-        <AmrConcurrencyDialog pageName="home" stage="before_run" branch={homeConcurrencyRejection.branch}
-          workspaceContext={homeConcurrencyRejection.workspaceContext}
-          profile={amrLoginStatus?.profile?.trim() || amrProfileForConfig(config)}
-          consoleOrigin={amrLoginStatus?.consoleOrigin}
-          onClose={() => setHomeConcurrencyRejection(null)} />
-      ) : null}
-      <HomeAmrBalanceGateDialogs
-        block={homeAmrBalanceGateBlock}
-        runtimeProfile={amrLoginStatus?.profile?.trim() || amrProfileForConfig(config)}
-        consoleOrigin={amrLoginStatus?.consoleOrigin}
-        metricsConsent={config.telemetry?.metrics === true}
-        installationId={config.installationId}
-      />
       {projectOpenError ? (
         <Toast
           message={projectOpenError}
@@ -6441,35 +6320,6 @@ function AppInner() {
           onDismiss={() => setProjectOpenError(null)}
         />
       ) : null}
-      {/* First-run privacy consent banner. It waits for daemon config
-          hydration because privacyDecisionAt is daemon-owned and stripped
-          from localStorage. It waits for `onboardingCompleted` so first-run
-          users see the welcome panel before the disclosure (Skip and
-          finish both flip the flag). Independent of Settings: z-index in
-          index.css sits above modal backdrops so opening Settings does
-          not hide the banner. */}
-      <AnimatePresence>
-      {showPrivacyConsent ? (
-        <motion.div
-          initial={{ opacity: 0, y: 20, scale: 0.97 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 10, scale: 0.97 }}
-          transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-        >
-        <PrivacyConsentModal
-          onShare={() => {
-            // The banner owns only the privacy decision; it does not drive
-            // navigation. Choosing Share keeps the current anonymous identity
-            // when one already exists and enables the telemetry surface.
-            handlePrivacyConsentChoice(true);
-          }}
-          onDecline={() => {
-            handlePrivacyConsentChoice(false);
-          }}
-        />
-      </motion.div>
-      ) : null}
-      </AnimatePresence>
     </ReferralEntryProvider>
   );
 }

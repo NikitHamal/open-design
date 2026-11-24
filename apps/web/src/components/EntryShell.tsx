@@ -2083,35 +2083,8 @@ export function EntryShell({
     ready: !workspaceContextState.loading && !workspaceContextState.identityChangePending
       && !workspaceContextState.failure && amrLoggedIn === true,
   });
-  if (registrationInvite) return registrationInvite;
-
-  if (view === 'onboarding') {
-    return (
-      <div className="entry-shell entry-shell--no-header entry-shell--onboarding">
-        <main className="entry-onboarding-modal" aria-label={t('settings.welcomeTitle')}>
-          <OnboardingView
-            autoCloudSignInRequested={inviteSignInRequest === 'start'}
-            onAutoCloudSignInConsumed={() => setInviteSignInRequest('waiting')}
-            config={config}
-            agents={agents}
-            agentsLoading={agentsLoading}
-            providerModelsCache={activeProviderModelsCache}
-            onProviderModelsCacheChange={activeSetProviderModelsCache}
-            daemonLive={daemonLive}
-            onModeChange={onModeChange}
-            onAgentChange={onAgentChange}
-            onAgentModelChange={onAgentModelChange}
-            onApiProtocolChange={onApiProtocolChange}
-            onApiModelChange={onApiModelChange}
-            onConfigPersist={onConfigPersist}
-            onRefreshAgents={onRefreshAgents}
-            onAmrLoginStatusChange={onAmrLoginStatusChange}
-            onFinish={finishOnboarding}
-          />
-        </main>
-      </div>
-    );
-  }
+  void registrationInvite;
+  void OnboardingView;
 
   const homeExecutionSwitcher = (
     <InlineModelSwitcher
@@ -2157,26 +2130,16 @@ export function EntryShell({
     skillsLoading,
     connectors,
     promptTemplates,
-    deepSeekV4FlashCampaignAudience,
+    deepSeekV4FlashCampaignAudience: null,
     onDeepSeekV4FlashCampaignUseNow: applyDeepSeekCampaignModel,
-    deepSeekV4FlashCampaignMetricsConsent: config.telemetry?.metrics === true,
-    deepSeekV4FlashCampaignInstallationId: config.installationId ?? null,
+    deepSeekV4FlashCampaignMetricsConsent: false,
+    deepSeekV4FlashCampaignInstallationId: null,
   };
 
   return (
     <div className={`entry-shell entry-shell--no-header${['home', 'all-projects', 'projects', 'drafts'].includes(view) ? ` ${styles.memberFrame}` : ''}`}>
-      {homeConcurrencyBlock && homeConcurrencyPresentation && homeConcurrencyBlock.identity === homeFundingIdentity ? (
-        <AmrConcurrencyDialog pageName="home" stage="before_run" branch={homeConcurrencyPresentation.branch}
-          upgradeAllowed={homeConcurrencyPresentation.upgradeAllowed}
-          workspaceContext={homeConcurrencyBlock.workspaceContext}
-          profile={amrRegistrationStatus?.profile?.trim() || amrProfile}
-          consoleOrigin={amrRegistrationStatus?.consoleOrigin}
-          onClose={() => setHomeConcurrencyBlock(null)} />
-      ) : null}
       <div
         className={`entry${railOpen ? ' entry--rail-open' : ''}`}
-        // The team/local shell is a labeled Manus-style rail, so widen the rail
-        // track (the base 56px icon-rail clips the labels + team affordances).
         style={{ ['--entry-rail-width' as string]: '236px' }}
       >
         <EntryNavRail
@@ -2192,45 +2155,18 @@ export function EntryShell({
           }}
           onOpenSearch={() => setProjectSearchOpen(true)}
           open={railOpen}
-          inviteSlot={<HomeInviteTrigger signedOut={amrLoggedIn === false} context={railWorkspaceContext} />}
-          topRightSlot={<>
-            {topRightCampaignAudience || (homeCampaignHostsVisible && amrLoggedIn === true) ? (
-            <>
-              {topRightCampaignAudience ? (
-                <WorkbenchCampaignBadge
-                  audience={topRightCampaignAudience}
-                  page="home"
-                  metricsConsent={config.telemetry?.metrics === true}
-                  installationId={config.installationId}
-                  loggedIn={amrLoggedIn}
-                />
-              ) : null}
-              {homeCampaignHostsVisible
-                && canRenderProductionCampaignBadge(amrLoggedIn === true, amrAccountId) ? <ProductionCampaignBadge authenticated sessionSubject={amrAccountId} /> : null}
-              {/* The requirements-specific hover entry is its own authorized
-                  touchpoint, beside—not renamed from—the account badge. */}
-              {homeCampaignHostsVisible ? (
-                <ProductionCampaignHover
-                  authenticated={amrLoggedIn === true}
-                  sessionSubject={amrAccountId}
-                />
-              ) : null}
-            </>
-          ) : null}</>}
+          inviteSlot={null}
+          topRightSlot={null}
           context={railWorkspaceContext}
           billing={workspaceBilling}
           billingResponse={workspaceBillingResponse}
           balanceUsd={workspaceBalanceUsd}
           onOpenSettings={onOpenSettings}
-          onInvite={() => changeView('members')}
-          onSignInCloud={() => navigate({ kind: 'home', view: 'onboarding' })}
+          onInvite={() => {}}
+          onSignInCloud={() => {}}
           onSignedOut={onSignedOut}
           updaterSlot={updaterSlot}
-          // A loading or unavailable workspace read is not proof of sign-out.
-          // Keep the account slot neutral until Cloud answers successfully;
-          // only a successful null context (or known local sign-out) may show
-          // the sign-in card.
-          footerNotice={accountFooterNotice}
+          footerNotice={null}
           /* Same catalog and same opener the 全部项目 grid uses below, so the
              rail's 最近浏览过 list and that view's 最近浏览过 tab are two views of
              ONE list rather than two sorts of two lists. */

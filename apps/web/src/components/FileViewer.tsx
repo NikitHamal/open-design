@@ -7,8 +7,8 @@ import { useExperienceError } from '../observability/use-experience-error';
 import { daemonErrorCodeProp, failureDetailProps } from '../analytics/failure-detail';
 import { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type CSSProperties, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import type { ArtifactExportFormat } from '../runtime/chat/artifact-export';
-import shareEntryStyles from './share/ShareEntry.module.css';
 import { AnchoredMenuShell } from './chat/AnchoredMenuShell';
+const shareEntryStyles = { toolbar: 'share-entry-toolbar', toolbarSecondary: 'share-entry-toolbar-secondary' } as const;
 import { createPortal, flushSync } from 'react-dom';
 import { Button, Input, Select } from '@open-design/components';
 import {

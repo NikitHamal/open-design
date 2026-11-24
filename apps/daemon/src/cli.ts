@@ -37,6 +37,12 @@ import { parseStockSearchRequest, type StockSearchResponse } from '@open-design/
 
 const argv = process.argv.slice(2);
 
+if (argv.includes('--zeus-stdio')) {
+  const { runZeusStdioCli } = await import('./runtimes/zeus/stdio-runner.js');
+  await runZeusStdioCli(argv.filter((a) => a !== '--zeus-stdio'));
+  process.exit(0);
+}
+
 const RESUME_CONTINUE_PROMPT =
   'The previous turn was interrupted by a transient failure. ' +
   'If your last response was cut off, continue it from where you left off ' +

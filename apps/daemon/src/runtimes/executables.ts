@@ -289,10 +289,8 @@ function packagedBuiltInExecutable(
   configuredEnv: Record<string, string> = {},
 ): string | null {
   if (def.id === 'zeus') {
-    const { hasOverride } = resolveDetectionHome();
-    if (hasOverride && !process.env.ZEUS_BIN && !configuredEnv.ZEUS_BIN) {
-      return null;
-    }
+    const nodeBin = configuredEnv.OD_NODE_BIN?.trim() || process.env.OD_NODE_BIN?.trim();
+    if (nodeBin && existsSync(nodeBin)) return nodeBin;
     return process.execPath;
   }
   if (def.id === 'byok-opencode') {

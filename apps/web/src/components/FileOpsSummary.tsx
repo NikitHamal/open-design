@@ -33,8 +33,8 @@ import type { ProjectFile } from '../types';
 import { Icon, type IconName } from './Icon';
 import { PixelLiquid } from './PixelLiquid';
 import { RemixIcon } from './RemixIcon';
-import shareEntryStyles from './share/ShareEntry.module.css';
 import { HtmlProjectCoverFrame } from './project-cover';
+const shareEntryStyles = { card: 'share-entry-card' } as const;
 import { AudioArtifact } from './chat/AudioArtifact';
 import { ARTIFACT_ANCHOR_ATTR, artifactAnchorId } from './chat/AnchoredMenuShell';
 

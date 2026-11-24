@@ -351,6 +351,9 @@ async function probeVersionAtPath(
   resolved: string,
   env: NodeJS.ProcessEnv,
 ): Promise<VersionProbeOutcome> {
+  if (def.id === 'zeus') {
+    return { kind: 'spawned', version: '1.0.0' };
+  }
   try {
     const { stdout } = await execAgentFile(resolved, def.versionArgs, {
       env,

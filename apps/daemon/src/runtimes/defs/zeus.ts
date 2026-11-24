@@ -46,10 +46,19 @@ export const ZEUS_RUNTIME_MODELS: RuntimeModelOption[] = [
 
 export function resolveZeusStdioRunnerPath(): string {
   const dir = path.dirname(fileURLToPath(import.meta.url));
-  const jsCandidate = path.resolve(dir, '../zeus/stdio-runner.js');
-  if (existsSync(jsCandidate)) return jsCandidate;
-  const tsCandidate = path.resolve(dir, '../zeus/stdio-runner.ts');
-  return tsCandidate;
+  const candidates = [
+    path.resolve(dir, '../zeus/stdio-runner.js'),
+    process.env.OD_DAEMON_CLI_PATH?.trim() || '',
+    process.env.OD_BIN?.trim() || '',
+    path.resolve(dir, '../daemon-cli.mjs'),
+    path.resolve(dir, './daemon-cli.mjs'),
+    path.resolve(dir, '../../cli.js'),
+    path.resolve(dir, '../zeus/stdio-runner.ts'),
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return path.resolve(dir, '../daemon-cli.mjs');
 }
 
 export const zeusAgentDef = {
@@ -57,9 +66,12 @@ export const zeusAgentDef = {
   name: 'Zeus Engine',
   bin: 'zeus-engine',
   versionArgs: ['--version'],
+  env: {
+    ELECTRON_RUN_AS_NODE: '1',
+  },
   fallbackModels: ZEUS_RUNTIME_MODELS,
   fetchModels: async () => ZEUS_RUNTIME_MODELS,
-  buildArgs: () => [resolveZeusStdioRunnerPath(), '--stdio'],
+  buildArgs: () => [resolveZeusStdioRunnerPath(), '--zeus-stdio', '--stdio'],
   promptViaStdin: true,
   streamFormat: 'dsh-profile-jsonl',
   resumesSessionViaProfileStdio: true,

@@ -443,14 +443,36 @@ async function handleExecuteCommand(
   const modelId = cmd.model?.id || 'mercury-3';
   const effort = cmd.reasoning_effort || 'medium';
 
+  const doneKeyMatch = /<od-done\s+key="([^"]+)"/i.exec(cmd.prompt);
+  const doneKey = doneKeyMatch?.[1] ?? '';
+  const wantsTitleMarker = cmd.prompt.includes('<od-title>');
+
+  let userPromptText = cmd.prompt;
+  let extraSystemContext = '';
+  const userRequestMarker = '\n# User request\n\n';
+  const markerIdx = cmd.prompt.lastIndexOf(userRequestMarker);
+  if (markerIdx !== -1) {
+    const rawInstructions = cmd.prompt.slice(0, markerIdx);
+    userPromptText = cmd.prompt.slice(markerIdx + userRequestMarker.length).trim();
+    const dsMatch = /(?:## Design System|# Design System|## Visual Direction)[\s\S]{0,4000}/i.exec(rawInstructions);
+    if (dsMatch) {
+      extraSystemContext = `\n\n${dsMatch[0].trim()}`;
+    }
+  }
+  if (wantsTitleMarker && !resumed) {
+    extraSystemContext += '\n\nBefore answering the user request, emit one short title marker: <od-title>2-5 Word Title</od-title>';
+  }
+
+  const effectiveSystemPrompt = `${ZEUS_BRIDGE_SYSTEM_PROMPT}${extraSystemContext}`;
+
   const history = resumed ? loadSessionHistory(cwd, sessionId) : [];
   const messages: ZeusChatMessage[] = [
     ...history,
-    { role: 'user', content: cmd.prompt },
+    { role: 'user', content: userPromptText || cmd.prompt },
   ];
 
   const wroteFiles: string[] = [];
-  let totalInputChars = cmd.prompt.length;
+  let totalInputChars = (userPromptText || cmd.prompt).length;
   let totalOutputChars = 0;
   const MAX_ROUNDS = 6;
 
@@ -477,7 +499,7 @@ async function handleExecuteCommand(
           provider,
           model: modelId,
           effort,
-          system: ZEUS_BRIDGE_SYSTEM_PROMPT,
+          system: effectiveSystemPrompt,
           messages,
           workspaceRoot: cwd,
         },
@@ -546,6 +568,14 @@ async function handleExecuteCommand(
       const { cleanedText, toolCalls } = extractToolCallsFromOutput(withoutThink);
 
       if (toolCalls.length > 0) {
+        if (cleanedText) {
+          writeFrame({
+            v: 1,
+            type: 'text',
+            request_id: requestId,
+            content: `${cleanedText}\n\n`,
+          });
+        }
         messages.push({ role: 'assistant', content: withoutThink });
         const toolResultsSummary: string[] = [];
 
@@ -616,6 +646,16 @@ async function handleExecuteCommand(
           `Created \`${fallbackArtifact.filename}\`.`;
       }
 
+      const savedAssistantText = finalVisibleText;
+      if (doneKey) {
+        if (wroteFiles.length > 0 && !finalVisibleText.includes('<od-focus')) {
+          finalVisibleText += `\n<od-focus key="${doneKey}" open="${wroteFiles[wroteFiles.length - 1]}"/>`;
+        }
+        if (!finalVisibleText.includes('<od-done') && !finalVisibleText.includes('<question-form')) {
+          finalVisibleText += `\n<od-done key="${doneKey}"/>`;
+        }
+      }
+
       if (finalVisibleText) {
         writeFrame({
           v: 1,
@@ -625,7 +665,7 @@ async function handleExecuteCommand(
         });
       }
 
-      messages.push({ role: 'assistant', content: finalVisibleText });
+      messages.push({ role: 'assistant', content: savedAssistantText });
       saveSessionHistory(cwd, sessionId, messages);
       break;
     }

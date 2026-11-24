@@ -50,8 +50,7 @@
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "shiki": "4.1.0",
-    "thinking-orbs": "0.3.1",
-    "three": "0.185.1"
+    "thinking-orbs": "0.3.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.3.0",
@@ -61,7 +60,6 @@
     "@types/node": "20.19.39",
     "@types/react": "18.3.28",
     "@types/react-dom": "18.3.7",
-    "@types/three": "0.185.1",
     "@typescript/native": "npm:typescript@7.0.2",
     "jsdom": "29.1.1",
     "postcss": "8.5.15",

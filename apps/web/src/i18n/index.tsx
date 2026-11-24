@@ -9,25 +9,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { de } from './locales/de';
 import { en } from './locales/en';
-import { id } from './locales/id';
-import { esES } from './locales/es-ES';
-import { fa } from './locales/fa';
-import { ar } from './locales/ar';
-import { ja } from './locales/ja';
-import { ko } from './locales/ko';
-import { ptBR } from './locales/pt-BR';
-import { ru } from './locales/ru';
-import { zhCN } from './locales/zh-CN';
-import { zhTW } from './locales/zh-TW';
-import { pl } from './locales/pl';
-import { hu } from './locales/hu';
-import { fr } from './locales/fr';
-import { uk } from './locales/uk';
-import { tr } from './locales/tr';
-import { th } from './locales/th';
-import { it } from './locales/it';
 import { getOpenDesignHost } from '@open-design/host';
 import { LOCALES, type Dict, type Locale } from './types';
 
@@ -36,27 +18,7 @@ export type { Locale } from './types';
 
 type DictKey = keyof Dict;
 
-const DICTS: Record<Locale, Dict> = {
-  'en': en,
-  'id': id,
-  'de': de,
-  'zh-CN': zhCN,
-  'zh-TW': zhTW,
-  'pt-BR': ptBR,
-  'es-ES': esES,
-  'ru': ru,
-  'fa': fa,
-  'ar': ar,
-  'ja': ja,
-  'ko': ko,
-  'pl': pl,
-  'hu': hu,
-  'fr': fr,
-  'uk': uk,
-  'tr': tr,
-  'th': th,
-  'it': it,
-};
+const DICTS: Partial<Record<Locale, Dict>> = { en };
 
 const LS_KEY = 'open-design:locale';
 // Marker that says "the value in LS_KEY came from a deliberate user

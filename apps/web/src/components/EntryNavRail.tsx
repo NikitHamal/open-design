@@ -1389,24 +1389,7 @@ export function EntryTopRightCluster({
           {/* GitHub star chip: its own option in the cluster, right after the
               campaign badge (per product) — it used to live in the account
               menu's social row. */}
-          {clusterVisible ? (
-            <a
-              className="entry-top-right-github"
-              href={REPO_URL}
-              {...externalLinkProps}
-              aria-label={`GitHub · ${githubStars == null ? GITHUB_STARS_FALLBACK_LABEL : formatStars(githubStars)} stars`}
-              title={`GitHub · ${githubStars == null ? GITHUB_STARS_FALLBACK_LABEL : formatStars(githubStars)} stars`}
-              data-testid="entry-top-right-github"
-              onClick={() => trackAccountAction('github')}
-            >
-              {/* 15, not the wordmark's 14: the octocat only fills 81% of its
-                  24-unit viewBox while the plan wordmark fills 90% of its own, so
-                  equal box heights drew an optically smaller mark. 15 puts the
-                  two drawn glyphs on the same ~12.5px height. */}
-              <Icon name="github-filled" size={15} />
-              <span>{githubStars == null ? GITHUB_STARS_FALLBACK_LABEL : formatStars(githubStars)}</span>
-            </a>
-          ) : null}
+          {clusterVisible ? null : null}
           {inviteSlot}
           {/* The capsule holds the credits segment alone — the avatar moved
               to the rail, and with it the account menu's hover region. The
@@ -1638,23 +1621,7 @@ export function EntryTopRightCluster({
                           are never split across two destinations. Gated on
                           the URL: without a console to reach, the row would
                           be a dead click. */}
-                      {accountBillingUrl ? (
-                        <a
-                          className="entry-nav-rail__menu-item"
-                          role="menuitem"
-                          href={accountBillingUrl}
-                          {...externalLinkProps}
-                          data-testid="entry-account-billing"
-                          onClick={(event) => {
-                            event.preventDefault();
-                            void openExternalUrl(accountBillingUrl);
-                            trackAccountAction('billing');
-                            closeAccountMenu();
-                          }}
-                        >
-                          <RemixIcon name="wallet-line" size={15} /> {t('entry.accountBilling')}
-                        </a>
-                      ) : null}
+                      {accountBillingUrl ? null : null}
                       {/* #5517's account menu went 设置 → GitHub 帮助 → 功能建议 →
                           社交行, with no theme row, no language submenu, and no
                           divider in between. Both of those controls still have
@@ -1663,30 +1630,8 @@ export function EntryTopRightCluster({
                           capability. 设置 itself left too: it is a rail item
                           under 插件 on this branch, and repeating it here would
                           be the same dialog twice in one column. */}
-                      <a
-                        className="entry-nav-rail__menu-item"
-                        role="menuitem"
-                        href={GITHUB_HELP_URL}
-                        {...externalLinkProps}
-                        onClick={() => {
-                          trackAccountAction('github_help');
-                          closeAccountMenu();
-                        }}
-                      >
-                        <Icon name="comment" size={15} /> {t('entry.accountGithubHelp')}
-                      </a>
-                      <a
-                        className="entry-nav-rail__menu-item"
-                        role="menuitem"
-                        href={GITHUB_FEATURE_URL}
-                        {...externalLinkProps}
-                        onClick={() => {
-                          trackAccountAction('feature_request');
-                          closeAccountMenu();
-                        }}
-                      >
-                        <Icon name="sparkles" size={15} /> {t('entry.accountFeatureRequest')}
-                      </a>
+                      
+                      
                       <div className="entry-nav-rail__menu-divider" />
                       <button
                         type="button"
@@ -1938,39 +1883,9 @@ function RailSocialRow({
 
   return (
     <div className="entry-nav-rail__menu-social" data-testid="entry-nav-rail-social">
-      <a
-        className={btnClass}
-        href={community.href}
-        {...externalLinkProps}
-        aria-label={communityLabel}
-        {...hint(communityLabel)}
-        data-testid="entry-nav-rail-discord"
-        data-community-platform={community.platform}
-        onClick={() => track(community.platform)}
-      >
-        {community.platform === 'feishu'
-          ? <FeishuIcon monochrome width={glyph} height={glyph} />
-          : <Icon name="discord" size={glyph} />}
-      </a>
-      <a
-        className={btnClass}
-        href={X_URL}
-        {...externalLinkProps}
-        aria-label={xLabel}
-        {...hint(xLabel)}
-        onClick={() => track('twitter')}
-      >
-        <XMark size={glyph} />
-      </a>
-      <a
-        className={btnClass}
-        href={CONTACT_EMAIL_URL}
-        aria-label={mailLabel}
-        {...hint(mailLabel)}
-        onClick={() => track('email')}
-      >
-        <Icon name="mail" size={glyph} />
-      </a>
+      
+      
+      
     </div>
   );
 }
@@ -2420,28 +2335,7 @@ export function EntryNavRail({
                         </button>
                         <p className={styles.workspaceLimitNote} role="note">{t('workspaceSwitcher.limitReached')}</p>
                       </>
-                    ) : workspaceSettingsUrl ? (
-                      <a
-                        className="entry-nav-rail__menu-item"
-                        role="menuitem"
-                        href={teamConsoleUrl(workspaceSettingsUrl, 'create-team')}
-                        {...externalLinkProps}
-                        data-testid="entry-nav-create-team"
-                        onClick={(event) => {
-                          event.preventDefault();
-                          void openExternalUrl(teamConsoleUrl(workspaceSettingsUrl, 'create-team'));
-                          trackWorkspaceSwitcherClick(analytics.track, {
-                            page_name: analyticsPage,
-                            area: 'workspace_switcher',
-                            element: 'create_team',
-                            ...workspaceDimensions,
-                          });
-                          setTeamOpen(false);
-                        }}
-                      >
-                        <Icon name="plus" size={15} /> {t('workspaceSwitcher.createTeam')}
-                      </a>
-                    ) : null}
+                    ) : workspaceSettingsUrl ? null : null}
                   </div>
                 </div>
               </>

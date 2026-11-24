@@ -1,4 +1,4 @@
-import referralNoticeStyles from './ReferralNotice.module.css';
+const referralNoticeStyles: Record<string, string> = {};
 // Lovart-style centered hero for the entry Home view.
 //
 // The prompt textarea is the canonical creation surface: the user

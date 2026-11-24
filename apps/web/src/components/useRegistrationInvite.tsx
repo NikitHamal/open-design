@@ -6,7 +6,7 @@ import { useT } from '../i18n';
 import { workspaceProjectHeaders } from '../collab/workspace-identity';
 import { CenteredLoader } from './Loading';
 import { OnboardingInviteView } from './InviteDialog';
-import styles from './RegistrationInviteHost.module.css';
+const styles: Record<string, string> = {};
 
 export function registrationInviteCompletionKey(status: VelaLoginStatus): string | null {
   const claim = status.registrationInvite;

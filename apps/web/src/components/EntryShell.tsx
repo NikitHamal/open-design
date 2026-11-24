@@ -259,7 +259,7 @@ import {
   readStoredRailOpen,
 } from './entryRailBridge';
 import { resolveByokModelPreference } from './byok/validation';
-import onboardingWelcomeStyles from './OnboardingWelcome.module.css';
+const onboardingWelcomeStyles: Record<string, string> = {};
 import { AmrActivationHintText } from './AmrActivationHintText';
 
 // How long a cloud sign-in waits for the browser before offering to reopen it.

@@ -11,7 +11,7 @@ import { Button, Dialog } from '@open-design/components';
 import { Icon } from '../Icon';
 import { useT } from '../../i18n';
 import { chatSeam } from './ChatRoot';
-import frame from '../AmrBalanceDialog.module.css';
+const frame: Record<string, string> = {};
 import styles from './AmrOwnerTopUpDialog.module.css';
 
 export interface AmrOwnerTopUpDialogProps {

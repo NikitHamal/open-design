@@ -13,7 +13,6 @@ import { ConnectorSection } from './SettingsDialog';
 import { Icon } from './Icon';
 import { McpClientSection } from './McpClientSection';
 import { SkillsSection } from './SkillsSection';
-import { UseEverywhereGuidePanel } from './UseEverywhereModal';
 import { useT } from '../i18n';
 
 export type IntegrationTab = 'mcp' | 'connectors' | 'skills' | 'use-everywhere';
@@ -203,10 +202,7 @@ export function IntegrationsView({
 
         {activeTab === 'use-everywhere' ? (
           <div className="integrations-view__use-everywhere">
-            <UseEverywhereGuidePanel
-              onOpenSettings={() => setActiveTab('mcp')}
-              {...(liveDaemonUrl ? { daemonUrl: liveDaemonUrl } : {})}
-            />
+            
           </div>
         ) : null}
       </div>

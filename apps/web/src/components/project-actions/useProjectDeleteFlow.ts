@@ -1,3 +1,4 @@
+import { useProjectShareHistoryState } from '../../pruned-shims';
 import { useCallback, useRef, useState } from 'react';
 import type { WorkspaceCollabContext } from '@open-design/contracts';
 import type { TrackingProjectCollectionPage } from '@open-design/contracts/analytics';
@@ -9,7 +10,6 @@ import {
   workspaceAnalyticsDimensions,
 } from '../../analytics/workspace';
 import type { Project } from '../../types';
-import { useProjectShareHistoryState } from '../share/useProjectShareHistory';
 import { currentWorkspaceAccountGeneration } from '../../collab/workspace-identity';
 
 /** Return `false` (or reject) when the daemon refused or the request failed;

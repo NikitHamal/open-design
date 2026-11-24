@@ -1,14 +1,4 @@
-// Project-level action bar mounted between the AppChromeHeader and
-// the chat-and-workspace split (#451). Hosts the new project-scoped
-// actions ("Finalize design package", "Continue in CLI"); per-file
-// actions (Export PDF/PPTX/ZIP, Deploy) stay in the FileViewer share
-// menu where they already live.
-//
-// The bar is intentionally thin: presentation, layout, and a couple
-// of conditional flags. Behavior lives in ProjectView (handlers,
-// hooks) and the per-button components.
 
-import { ContinueInCliButton } from './ContinueInCliButton';
 import { FinalizeDesignButton } from './FinalizeDesignButton';
 import type { DesignMdState } from '../hooks/useDesignMdState';
 import type { FinalizeStatus } from '../hooks/useFinalizeProject';
@@ -43,7 +33,7 @@ export function ProjectActionsToolbar({
         onFinalize={onFinalize}
         onCancel={onCancelFinalize}
       />
-      <ContinueInCliButton designMdState={designMdState} onClick={onContinueInCli} />
+      
     </div>
   );
 }

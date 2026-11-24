@@ -1,8 +1,8 @@
+import { ProjectShareReadStatus } from '../../pruned-shims';
 import { useId } from 'react';
 import { Dialog, DialogDescription, DialogFooter, DialogTitle } from '@open-design/components';
 
 import { useT } from '../../i18n';
-import type { ProjectShareReadStatus } from '../share/useProjectShareHistory';
 import styles from './ProjectDeleteConfirmDialog.module.css';
 
 /**

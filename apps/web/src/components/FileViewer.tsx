@@ -1,27 +1,12 @@
+import { ObservedPublicShareLink, ObservedShareUpdateRequest, ShareLoginReturn, SharePublishFailureKey, boundedPublishProgress, invalidateCommentSyncState, moveConfirmSkipped, notifyProjectShareHistoryChanged, shareLoginReturnMatches, useAfterExportShareGuide, useProjectShareHistoryState, useShareGuideAppUserId, useShareSourceGuard } from '../pruned-shims';
 import { validateCommentSaveTarget } from '../comments/validate-save-target';
 import { previewStorageKey, readPreviewStorage, savePreviewStorageMessage } from '../runtime/preview-storage';
 import { commentSelectorsMatch, commentUsesIdentity, ownerCommentNeedsLocation, resolveOwnerCommentAnchor } from '../comments/owner-anchor';
 import { indexCommentTargets } from '../comments/target-index';
-import { useShareSourceGuard } from './share/useShareSourceGuard';
 import { useExperienceError } from '../observability/use-experience-error';
 import { daemonErrorCodeProp, failureDetailProps } from '../analytics/failure-detail';
 import { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type CSSProperties, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import type { ArtifactExportFormat } from '../runtime/chat/artifact-export';
-import { boundedPublishProgress, ShareTab, type SharePublishFailureKey } from './share/ShareTab';
-import type { ObservedPublicShareLink, ObservedShareUpdateRequest } from './share/observed-public-share-link';
-import { shareLoginReturnMatches, type ShareLoginReturn } from './share/share-login-return';
-
-import { AfterExportShareGuide } from './share/AfterExportShareGuide';
-import { CommentSyncBanner } from './share/CommentSyncBanner';
-import { invalidateCommentSyncState } from './share/useCommentSyncState';
-import { useAfterExportShareGuide } from './share/useAfterExportShareGuide';
-import { useShareGuideAppUserId } from './share/useShareGuideAppUserId';
-import { useProjectShareHistoryState } from './share/useProjectShareHistory';
-import { notifyProjectShareHistoryChanged } from './share/share-publication-events';
-import { ShareFeedbackToast } from './share/ShareFeedbackToast';
-import { TopStackedToast } from './share/TopStackedToast';
-import { SharePanelHeader } from './share/SharePanelHeader';
-import { ShareMoreMenu } from './share/ShareMoreMenu';
 import shareEntryStyles from './share/ShareEntry.module.css';
 import { AnchoredMenuShell } from './chat/AnchoredMenuShell';
 import { createPortal, flushSync } from 'react-dom';
@@ -148,7 +133,6 @@ import {
   publicFileMutationNeedsReconciliation,
 } from '../collab/public-file-publish';
 import { moveWorkspaceProject, workspaceProjectMoveErrorCode } from '../state/projects';
-import { MoveToTeamConfirmDialog, moveConfirmSkipped } from './MoveToTeamConfirmDialog';
 import type { Dict, Locale } from '../i18n/types';
 import {
   fetchLiveArtifact,
@@ -292,7 +276,6 @@ import { composerHasUnsentWork } from '../comments/composer-unsent-work';
 import { RemixIcon } from './RemixIcon';
 import { projectIsSharedWithWorkspace } from '../collab/project-shared-status';
 import { HandoffButton } from './HandoffButton';
-import { SocialShareGrid } from './SocialShareGrid';
 import { Toast } from './Toast';
 import {
   LocalizedExportError,
@@ -5017,7 +5000,7 @@ export function CommentSidePanel({
           </button>
         </div>
       </div>
-      <CommentSyncBanner projectId={projectId} workspaceContext={workspaceContext} filePath={filePath} includeBackfill={false} />
+      
       {sendableCount > 0 ? (
         <div className="comment-side-toolbar">
           <button
@@ -17816,36 +17799,7 @@ function HtmlViewer({
                     <span>{shareMenuLabel}</span>
                   </button>
                   {afterExportGuide.noticeId !== null ? (
-                    <AfterExportShareGuide
-                      key={afterExportGuide.noticeId}
-                      labels={{
-                        title: t('fileViewer.shareGuide.title'),
-                        description: t('fileViewer.shareGuide.description'),
-                        openShare: t('fileViewer.shareGuide.tryShare'),
-                        neverShow: t('fileViewer.shareGuide.neverShowAgain'),
-                        close: t('fileViewer.shareGuide.close'),
-                        saveFailed: t('fileViewer.shareGuide.preferenceSaveFailed'),
-                      }}
-                      onObserve={(event: any) => observeAnalytics(() => {
-                        const identity = {
-                          page_name: 'artifact' as const,
-                          area: 'share_guide' as const,
-                          project_id: projectId,
-                          project_kind: projectKind,
-                          artifact_id: anonymizeArtifactId({ projectId, fileName: file.name }),
-                        };
-                        if (event === 'view') trackShareGuideSurfaceView(analytics.track, identity);
-                        else trackShareGuideClick(analytics.track, { ...identity, element: event });
-                      })}
-                      onDismiss={afterExportGuide.dismiss}
-                      onNeverShow={afterExportGuide.neverShow}
-                      onOpenShare={() => {
-                        setMenuAnchorId(null);
-                        setMenuOrigin('toolbar');
-                        setUnifiedActionTab('share');
-                        setDeployMenuOpen(true);
-                      }}
-                    />
+                    null
                   ) : null}
                 {deployMenuOpen && (rawCanShare || rawCanDownload) ? (
                   /*
@@ -17886,84 +17840,9 @@ function HtmlViewer({
                   >
                     {unifiedActionTab === 'share' && rawCanShare ? (
                       <>
-                      <SharePanelHeader
-                        title={t('fileViewer.unifiedShareTab')}
-                        closeLabel={t('common.close')}
-                        onClose={closeDeployMenu}
-                      >
-                        <ShareMoreMenu label={t('fileViewer.moreSharingOptions')} items={DEPLOY_PROVIDER_OPTIONS.map(option => ({
-                          id: option.id,
-                          label: deployActionLabelFor(option.id),
-                          icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-                            {option.id === CLOUDFLARE_PAGES_PROVIDER_ID
-                              ? <><rect x="4" y="3" width="16" height="18" rx="1.5" /><path d="M4 8h16M8 12h8M8 16h5" /></>
-                              : <path d="M7 18H6a4 4 0 0 1-.6-8A7 7 0 0 1 19 9a4.5 4.5 0 0 1-1 9h-1M12 21V11m-3 3 3-3 3 3" />}
-                          </svg>,
-                          disabled: streaming || viewerOnly,
-                          title: viewerOnly ? viewerOnlyDisabledTitle : streaming ? t('fileViewer.shareAfterGenerationComplete') : undefined,
-                          onSelect: () => { void openDeployModal(option.id); },
-                        }))} />
-                      </SharePanelHeader>
+                      
 
-                      <ShareTab
-                        publicationQueryState={publicQuery.identity === publicFileReadIdentity ? publicQuery.status : 'loading'}
-                        retryPublicationQuery={() => setPublicQueryRetry(value => value + 1)}
-                        publicationStatus={fileShareStatus === 'active' || fileShareStatus === 'stopped' ? fileShareStatus : (projectShareHistory?.publications.find(publication => publication.sourceFilePath === file.name)?.status ?? null)}
-                        publicationFreshness={fileShareFreshness}
-                        updateCurrentFilePublic={updateCurrentFilePublic}
-                        canResumeUpdateAfterLogin={Boolean(retainedShareWasOutdatedRef.current && retainedShareAuthorizationScopeKeyRef.current && fileShareStatus === 'active' && publishedFileUrl)}
-                        onSignInSuccess={() => {
-                          const request = { projectId, filePath: file.name, expiresAt: Date.now() + 120_000 };
-                          // App owns this across ProjectView remounts. Only an
-                          // embedded viewer needs the local fallback; keeping
-                          // both would resurrect intent after App cancels it.
-                          if (onShareLoginReturnChange) onShareLoginReturnChange(request);
-                          else shareLoginReturnRef.current = request;
-                        }}
-                        onUpdateLoginSuccess={() => {
-                          const priorScope = retainedShareAuthorizationScopeKeyRef.current;
-                          if (!priorScope || !retainedShareWasOutdatedRef.current || !publishedFileSlug
-                            || !publishedFileUrl || fileShareStatus !== 'active') return;
-                          pendingShareUpdateAfterLoginRef.current = { projectId, fileName: file.name,
-                            slug: publishedFileSlug, authorizationScopeKey: priorScope, expiresAt: Date.now() + 120_000 };
-                        }}
-                        projectId={projectId}
-                        filePath={file.name}
-                        menuOrigin={menuOrigin}
-                        workspaceContext={workspaceContext}
-                        t={t}
-                        shareAccess={shareAccess}
-                        shareAccessMenuOpen={shareAccessMenuOpen}
-                        shareAccessBusy={shareAccessBusy}
-                        shareAccessFailureKey={shareAccessFailureKey}
-                        retryWorkspaceShareAccess={() => { if (shareAccessFailureTarget) void commitWorkspaceShareAccess(shareAccessFailureTarget); }}
-                        viewerOnly={viewerOnly}
-                        setShareAccessMenuOpen={setShareAccessMenuOpen}
-                        setWorkspaceShareAccess={setWorkspaceShareAccess}
-                        canPublishPublic={canPublishPublic}
-                        filePublished={filePublished}
-                        publishedLinkUnavailable={publishedLinkUnavailable}
-                        publishedFileUrl={publishedFileUrl}
-                        copyPublishedFileLink={copyPublishedFileLink}
-                        publishLinkFeedback={publishLinkFeedback}
-                        publishingPublicFile={publishingPublicFile}
-                        publicOperation={publicOperation}
-                        publishProgress={publishProgress}
-                        unpublishCurrentFilePublic={unpublishCurrentFilePublic}
-                        retryPublicShare={publicRetryAction === 'stop' ? unpublishCurrentFilePublic : updateCurrentFilePublic}
-                        viewerOnlyDisabledTitle={viewerOnlyDisabledTitle}
-                        publishCurrentFilePublic={publishCurrentFilePublic}
-                        publishFailureKey={publishFailureKey}
-                        publishConflict={publishFailureKey === 'fileViewer.publishFileEntryIndexConflict' ? publishConflict : null}
-                        streaming={streaming}
-                        sharePageUrl={sharePageUrl}
-                        canCopyShareLink={canCopyShareLink}
-                        shareUnavailableHint={shareUnavailableHint}
-                        copyShareLink={copyShareLink}
-                        copyShareLinkLabel={copyShareLinkLabel}
-                        canOpenSharePage={canOpenSharePage}
-                        shareLinkStatusHint={shareLinkStatusHint}
-                      />
+                      
                       </>
                     ) : null}
                     {unifiedActionTab === 'export' && rawCanDownload ? (
@@ -18409,27 +18288,13 @@ function HtmlViewer({
                 />
               ) : null}
               {workspaceActive && updateToast ? (
-                <ShareFeedbackToast
-                  message={t(updateToast === 'success' ? 'fileViewer.shareUpdateSuccess' : updateToast === 'failure' ? 'fileViewer.shareUpdateFailed' : 'fileViewer.shareUpdateUncertain')}
-                  tone={updateToast === 'success' ? 'success' : 'error'}
-                  ttlMs={updateToast === 'success' ? 2200 : 0}
-                  actionLabel={updateToast === 'failure' ? t('fileViewer.shareUpdateRetry') : undefined}
-                  onAction={updateToast === 'failure' ? () => { void updateCurrentFilePublic(); } : undefined}
-                  onDismiss={() => setUpdateToast(null)}
-                />
+                null
               ) : null}
               {/* Portaled to <body> so the screenshot/export toast escapes the
                   preview pane's transform + overflow:hidden. */}
               {workspaceActive && exportToast && !versionModalOpen
                 ? createPortal(
-                    <TopStackedToast
-                      message={exportToast.message}
-                      details={exportToast.details}
-                      tone={exportToast.tone}
-                      role={exportToast.tone === 'error' ? 'alert' : 'status'}
-                      ttlMs={exportToast.tone === 'loading' ? 60000 : 2200}
-                      onDismiss={exportToast.tone === 'loading' ? undefined : () => setExportToast(null)}
-                    />,
+                    null,
                     document.body,
                   )
                 : null}
@@ -18978,10 +18843,7 @@ function HtmlViewer({
                     <p className="hint">{socialShareUnavailableMessage}</p>
                   ) : null}
                   {activeProjectSocialShare ? (
-                    <SocialShareGrid
-                      share={activeProjectSocialShare}
-                      onAfterShare={closeDeployModal}
-                    />
+                    null
                   ) : null}
                   {socialShareBlockedDeployment?.url ? (
                     <div className="deploy-social-share__actions">
@@ -19292,50 +19154,20 @@ function HtmlViewer({
           own stacking fix keeps this from overlapping updateToast/
           shareGuideToast if more than one is up at once. */}
       {workspaceActive && deploySavedToast ? (
-        <ShareFeedbackToast
-          message={deploySavedToast.message}
-          details={deploySavedToast.details}
-          tone="success"
-          ttlMs={3600}
-          onDismiss={() => setDeploySavedToast(null)}
-        />
+        null
       ) : null}
       {workspaceActive && deployActionToast ? (
-        <ShareFeedbackToast
-          message={deployActionToast}
-          tone="error"
-          ttlMs={2400}
-          onDismiss={() => setDeployActionToast(null)}
-        />
+        null
       ) : null}
       {workspaceActive && shareAccessConfirm ? (
-        <MoveToTeamConfirmDialog
-          action={shareAccessConfirm === 'workspace' ? 'to-team' : 'to-personal'}
-          onCancel={() => setShareAccessConfirm(null)}
-          onConfirm={() => {
-            const next = shareAccessConfirm;
-            setShareAccessConfirm(null);
-            if (next) void commitWorkspaceShareAccess(next);
-          }}
-        />
+        null
       ) : null}
       {workspaceActive && versionRestoredToast && typeof document !== 'undefined' ? createPortal(
-        <TopStackedToast
-          key={versionRestoredToast.id}
-          message={versionRestoredToast.message}
-          tone="success"
-          ttlMs={2400}
-          onDismiss={() => setVersionRestoredToast(null)}
-        />,
+        null,
         document.body,
       ) : null}
       {workspaceActive && shareGuideToast ? (
-        <ShareFeedbackToast
-          message={shareGuideToast.message}
-          tone={shareGuideToast.tone}
-          ttlMs={2200}
-          onDismiss={() => setShareGuideToast(null)}
-        />
+        null
       ) : null}
     </div>
   );

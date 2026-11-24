@@ -1,3 +1,4 @@
+import { AMR_LOGIN_STATUS_EVENT, amrLoginStatusEventReason, isAmrSessionAuthenticated } from '../pruned-shims';
 import { openExternalUrl } from "../providers/registry";
 import { withTaskPresentation, newerTaskDisplay, type PresentedChatMessage } from '../runtime/chat/task-presentation';
 import { reportExperienceEvent } from '../observability/experience-diagnostics';
@@ -149,11 +150,6 @@ import {
   DESIGN_SYSTEM_NEXT_STEP_ACTIONS,
   type NextStepActionsVariant,
 } from './NextStepActions';
-import {
-  AMR_LOGIN_STATUS_EVENT,
-  amrLoginStatusEventReason,
-  isAmrSessionAuthenticated,
-} from './amrLoginPolling';
 import {
   amrPlansUrlForProfile,
   daemonFailureVerdictFrom,

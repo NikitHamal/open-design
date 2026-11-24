@@ -1,3 +1,4 @@
+import { useDiagnosticsExport } from '../../pruned-shims';
 /**
  * 报错卡上那颗〔导出日志〕(交付稿第 78 格,三颗动作里的第二颗,次级)。
  *
@@ -16,7 +17,6 @@
 import type { ReactElement } from 'react';
 import { VisuallyHidden } from '@open-design/components';
 import { Icon } from '../Icon';
-import { useDiagnosticsExport } from '../ExportDiagnosticsButton';
 import { useT } from '../../i18n';
 import { RunErrorCardAction } from './RunErrorCard';
 

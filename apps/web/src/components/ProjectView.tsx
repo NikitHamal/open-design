@@ -1,3 +1,4 @@
+import { ObservedPublicShareLink, ObservedShareUpdateRequest, SHARE_TO_COMMUNITY_PROMPT, ShareLoginReturn, nextShareRequestNonce, notifyArtifactDelivered } from '../pruned-shims';
 import { openExternalUrl } from "../providers/registry";
 import { homeAutoSendIdentity, stableIdentityDigest, type HomeRequestConcurrencyRejection } from '../runtime/home-auto-send-identity';
 import { withLiveArtifactDeliveries } from '../runtime/live-artifact-delivery';
@@ -7,8 +8,6 @@ import { useStartupReady } from '../observability/startup-ready';
 import { navigationTiming, useProjectNavigationReady, observeNavigation } from '../observability/navigation-timing';
 import { readRetriedErrorSurface, retriedErrorSurfaceKey, writeRetriedErrorSurface } from '../runtime/chat/retried-error-surface';
 import { runOutcomeAwaitsRunRecord, settleTurnFromRunRecord } from '../runtime/chat/pending-disconnect';
-import type { ObservedPublicShareLink, ObservedShareUpdateRequest } from './share/observed-public-share-link';
-import type { ShareLoginReturn } from './share/share-login-return';
 import {
   startTransition,
   useCallback,
@@ -183,7 +182,6 @@ import {
   resolveDesignDeliveryOutcome,
   type DesignDeliveryOutcome,
 } from '../runtime/design-delivery';
-import { notifyArtifactDelivered } from './experience-survey-trigger';
 import { RESUME_CONTINUE_PROMPT } from '../runtime/resume';
 import {
   amrBalanceGateScopeForWorkspaceContext,
@@ -205,8 +203,6 @@ import {
   type AmrBalanceBranch,
   type AmrBalanceBlockedDialogKind,
 } from '../runtime/amr-balance-branch';
-import { AmrBalanceDialog } from './AmrBalanceDialog';
-import { AmrConcurrencyDialog } from './AmrConcurrencyDialog';
 import { isMembershipConcurrencyLimitFailure } from '@open-design/contracts';
 import { AmrOwnerTopUpDialog } from './chat/AmrOwnerTopUpDialog';
 import { markHistoryReplayLanded } from './chat/useCharReveal';
@@ -319,7 +315,6 @@ import {
 } from '../comments';
 import { historyWithApiAttachmentContext } from '../api-attachment-context';
 import { filterImplicitProducedFiles } from '../produced-files';
-import { AvatarMenu } from './AvatarMenu';
 import { Icon } from './Icon';
 import { useWorkspaceTabsDockRef } from './workspaceTabsDock';
 import { localizePluginTitle } from './plugins-home/localization';
@@ -378,7 +373,6 @@ import {
   selectAutoOpenTurnArtifact,
   selectAutoOpenTurnArtifacts,
 } from './auto-open-file';
-import { nextShareRequestNonce } from './share-request-nonce';
 import { buildRepoImportPrompt, designSystemNeedsRepoConnect } from './design-system-github-evidence';
 import { isDesignSystemProject, resolveProjectDesignSystemId } from './design-system-project';
 import { collectReferencedJsxNames } from '../runtime/jsx-module-refs';
@@ -391,7 +385,6 @@ import {
 import {
   type PluginFolderAgentAction,
 } from './design-files/pluginFolderActions';
-import { SHARE_TO_COMMUNITY_PROMPT } from './share-to-community/shareToCommunityPrompt';
 import { CenteredLoader } from './Loading';
 import { useCreationHandoffMessages } from './useCreationHandoffMessages';
 import {
@@ -14619,63 +14612,7 @@ export function ProjectView({
   // not in the top-right header.
   const executionControls = (
     <>
-      <AvatarMenu
-        config={config}
-        agents={agents}
-        daemonLive={daemonLive}
-        onModeChange={onModeChange}
-        onOpen={() => {
-          trackComposerBarClick(analytics.track, {
-            page_name: 'chat_panel',
-            area: 'chat_composer',
-            element: 'agent_selector_open',
-            ...(project?.id ? { project_id: project.id } : {}),
-          });
-        }}
-        onAgentChange={(id) => {
-          trackComposerBarClick(analytics.track, {
-            page_name: 'chat_panel',
-            area: 'chat_composer',
-            element: 'agent_select',
-            agent_id: id,
-            ...(project?.id ? { project_id: project.id } : {}),
-          });
-          onAgentChange(id);
-        }}
-        onAgentModelChange={(agentId, choice) => {
-          trackComposerBarClick(analytics.track, {
-            page_name: 'chat_panel',
-            area: 'chat_composer',
-            element: 'agent_model_select',
-            agent_id: agentId,
-            ...(choice?.model ? { model_id: choice.model } : {}),
-            ...(project?.id ? { project_id: project.id } : {}),
-          });
-          onAgentModelChange(agentId, choice);
-          /*
-           * 「选完自动重跑」的那一半。只有确实是从报错卡那颗〔更换模型〕进来的
-           * 才会有待重跑的那一轮 —— 平时手动换模型不该无端重发。
-           */
-          const pending = rerunAfterModelChangeRef.current;
-          rerunAfterModelChangeRef.current = null;
-          if (pending) handleRetry(pending, 'switch_model_retry');
-        }}
-        onApiModelChange={(model) => {
-          trackComposerBarClick(analytics.track, {
-            page_name: 'chat_panel',
-            area: 'chat_composer',
-            element: 'agent_model_select',
-            model_id: model,
-            ...(project?.id ? { project_id: project.id } : {}),
-          });
-          onApiModelChange?.(model);
-        }}
-        onOpenSettings={onOpenSettings}
-        onRefreshAgents={onRefreshAgents}
-        openSignal={modelPickerOpenSignal}
-        placement="up"
-        projectWorkspaceScope={projectWorkspaceScopeState}
-      />
+      
     </>
   );
 
@@ -15310,13 +15247,7 @@ export function ProjectView({
         && concurrencyRejection.authorityKey === projectRunAuthorityKey
         && concurrencyRejection.accountGeneration === currentWorkspaceAccountGeneration()
         && config.mode === 'daemon' && config.agentId === 'amr' ? (
-        <AmrConcurrencyDialog branch={{ ...concurrencyRejection.branch, tier: concurrencyPresentation.branch.tier }}
-          stage={concurrencyRejection.stage}
-          upgradeAllowed={concurrencyPresentation.upgradeAllowed && concurrencyRejection.branch.audience === 'owner'}
-          workspaceContext={concurrencyRejection.workspaceContext}
-          profile={workspaceQuotaStatus?.profile?.trim() || config.agentCliEnv?.amr?.OPEN_DESIGN_AMR_PROFILE || null}
-          consoleOrigin={workspaceQuotaStatus?.consoleOrigin}
-          onClose={() => setConcurrencyDialogOpen(false)} />
+        null
       ) : null}
       {amrBalanceGateBlock?.dialog === 'ask_owner' || amrOwnerTopUpFromCard ? (
         /*
@@ -15335,45 +15266,7 @@ export function ProjectView({
         />
       ) : null}
       {amrBalanceGateBlock?.dialog === 'upgrade' ? (
-        <AmrBalanceDialog
-          reason={amrBalanceGateBlock.reason}
-          projectId={project.id}
-          conversationId={amrBalanceGateBlock.conversationId}
-          stage={amrBalanceGateBlock.stage}
-          manualSendOnRecovery={amrBalanceGateBlock.reason === 'insufficient'}
-          modelId={amrBalanceGateBlock.modelId}
-          fundingScope={amrBalanceGateBlock.fundingScope}
-          balanceUsd={amrBalanceGateBlock.snapshot?.balanceUsd ?? null}
-          profile={amrBalanceGateBlock.snapshot?.profile ?? (amrBalanceGateBlock.profile !== undefined
-            ? amrBalanceGateBlock.profile
-            : workspaceQuotaStatus?.profile?.trim() || amrProfile
-              || config.agentCliEnv?.amr?.OPEN_DESIGN_AMR_PROFILE || null)}
-          consoleOrigin={amrBalanceGateBlock.profile !== undefined
-            ? amrBalanceGateBlock.consoleOrigin : workspaceQuotaStatus?.consoleOrigin}
-          entrySource="chat_balance_gate_upgrade"
-          upgradeIntent={amrBalanceGateBlock.upgradeIntent}
-          // 弹窗和卡上那颗必须从**同一份**上下文算落点。默认那条(环境里选中
-          // 的工作区)对首页是对的,对项目页不是:这一笔钱是项目那个工作区出的,
-          // 环境里未必就是它。两处不同源正是产品文档说的「卡和弹窗跳去不同的
-          // 地方是缺陷而不是特性」。
-          workspaceContext={amrBalanceGateBlock.workspaceContext === undefined
-            ? projectRunBillingAuthorityContext : amrBalanceGateBlock.workspaceContext}
-          metricsConsent={config.telemetry?.metrics === true}
-          installationId={config.installationId}
-          onClose={() => setAmrBalanceGateBlock(null)}
-          onResolved={() => {
-            const conversationId = amrBalanceGateBlock.conversationId;
-            setAmrBalanceGateBlock(null);
-            // Current QA RUN-012: funding recovery does not submit inputs
-            // that have not been sent. Preserve the gateway-paused queue and
-            // its full payload for the existing manual "send now" action;
-            // the failed run also remains in history for explicit retry.
-            // Sign-in recovery retains its original queue behavior.
-            if (amrBalanceGateBlock.reason === 'insufficient') return;
-            amrGatePausedQueueConversationsRef.current.delete(conversationId);
-            setQueuedAutoStartTick((tick) => tick + 1);
-          }}
-        />
+        null
       ) : null}
       <AnimatePresence>
         {projectActionsToast && !projectActionsToastInChatPane ? projectActionsToastNode : null}

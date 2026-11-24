@@ -1,3 +1,4 @@
+import { useBatchProjectShareCount } from '../pruned-shims';
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Dialog, DialogDescription, DialogFooter, DialogTitle } from "@open-design/components";
@@ -38,7 +39,6 @@ import { LiveArtifactBadges } from "./LiveArtifactBadges";
 import { Toast } from "./Toast";
 import { ProjectDeleteConfirmDialog } from "./project-actions/ProjectDeleteConfirmDialog";
 import { useProjectDeleteFlow } from "./project-actions/useProjectDeleteFlow";
-import { useBatchProjectShareCount } from "./project-actions/useBatchProjectShareCount";
 import {
 	HtmlProjectCoverFrame,
 	coverFromProjectFile,

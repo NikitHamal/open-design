@@ -1,3 +1,4 @@
+import { moveConfirmSkipped } from '../pruned-shims';
 import { orderProjectItems } from '../lib/project-order';
 import { reportProjectFailure } from '../observability/experience-diagnostics';
 import {
@@ -62,7 +63,6 @@ import {
   useProjectDuplicateFlow,
 } from './project-actions/useProjectDuplicateFlow';
 import { useWorkspaceProjectMove } from './project-actions/useWorkspaceProjectMove';
-import { MoveToTeamConfirmDialog, moveConfirmSkipped } from './MoveToTeamConfirmDialog';
 import actionStyles from './WorkspaceProjectActions.module.css';
 import { acknowledgeProjectCompletion, useProjectRunStatuses } from '../hooks/useProjectRunStatuses';
 import { STATUS_LABEL_KEYS } from '../state/projectRunStatus';
@@ -2731,15 +2731,7 @@ export function WorkspaceTabsBar({
         document.body,
       ) : null}
       {moveTarget ? (
-        <MoveToTeamConfirmDialog
-          action="to-team"
-          onCancel={() => setMoveTarget(null)}
-          onConfirm={() => {
-            const project = moveTarget;
-            setMoveTarget(null);
-            void moveFlow.shareToTeam(project);
-          }}
-        />
+        null
       ) : null}
       {radialMenu ? createPortal(
         <div className="workspace-radial-layer" onMouseDown={() => setRadialMenu(null)}>

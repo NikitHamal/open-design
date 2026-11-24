@@ -1,3 +1,4 @@
+import { DeepSeekV4FlashCampaignAudience, buildCommunityTemplates } from '../pruned-shims';
 // Composed Home view — the top-down layout the entry view renders
 // when the left nav rail's "Home" tab is active.
 //
@@ -134,12 +135,6 @@ import {
   type HomePromptHandoff,
 } from './home-hero/plugin-authoring';
 import { PluginDetailsModal } from './PluginDetailsModal';
-import {
-  buildCommunityTemplates,
-  copyTemplatePrompt,
-  isPromptArtifact,
-  TemplatePreviewModal,
-} from './CommunityTemplatePreview';
 import { SkillDetailsModal } from './SkillDetailsModal';
 import type { PluginLoopSubmit } from './PluginLoopHome';
 import { localizeHomePresetTitle, localizePluginTitle } from './plugins-home/localization';
@@ -149,8 +144,6 @@ import { localizePluginDescription } from './plugins-home/localization';
 import type { Recommendation } from '../onboarding/recommendation';
 import type { OnboardingEntry } from '../onboarding/onboarding-entry';
 import { AnimatePresence } from 'motion/react';
-import { DeepSeekV4FlashCampaign } from './DeepSeekV4FlashCampaign';
-import type { DeepSeekV4FlashCampaignAudience } from '../campaigns/deepseek-v4-flash';
 import { hostFolderPickerErrorMessage } from './host-folder-picker-error';
 
 export interface ActivePlugin {
@@ -3127,13 +3120,7 @@ export function HomeView({
           it is a Home-page moment, and a second copy of the modal would fight
           the page one over the same dismissal state. */}
       {variant === 'dock' ? null : (
-        <DeepSeekV4FlashCampaign
-          audience={deepSeekV4FlashCampaignAudience}
-          active={isActive}
-          onUseCampaignModel={onDeepSeekV4FlashCampaignUseNow}
-          metricsConsent={deepSeekV4FlashCampaignMetricsConsent}
-          installationId={deepSeekV4FlashCampaignInstallationId}
-        />
+        null
       )}
       <HomeHero
         referralNotice={referralNotice}
@@ -3273,40 +3260,7 @@ export function HomeView({
 
       <AnimatePresence>
         {detailsRecord && detailsTemplate ? (
-          <TemplatePreviewModal
-            template={detailsTemplate}
-            onClose={() => {
-              // Same dismissal funnel as the full modal below — close button,
-              // Esc-less backdrop mousedown — so the analytics area stays one.
-              trackPluginDetailModalClick(analytics.track, {
-                page_name: 'home',
-                area: 'plugin_detail_modal',
-                element: 'close',
-                plugin_id: detailsRecord.sourceMarketplaceEntryName ?? detailsRecord.id,
-                plugin_type: detailsRecord.marketplaceTrust ?? 'official',
-              });
-              setDetailsRecord(null);
-            }}
-            onUse={() => {
-              // Footer action mirrors the community lightweight preview:
-              // prompt artifacts copy their seed prompt; template artifacts
-              // Remix — here that is the creation page's existing Remix
-              // semantic, duplicating the example as a project — behind a
-              // synchronous single-flight gate (see templateRemixInFlightRef).
-              if (isPromptArtifact(detailsTemplate)) {
-                void copyTemplatePrompt(detailsTemplate);
-                return;
-              }
-              if (templateRemixInFlightRef.current) return;
-              templateRemixInFlightRef.current = true;
-              setTemplateRemixBusy(true);
-              void duplicateExamplePlugin(detailsRecord).finally(() => {
-                templateRemixInFlightRef.current = false;
-                setTemplateRemixBusy(false);
-              });
-            }}
-            busy={templateRemixBusy}
-          />
+          null
         ) : detailsRecord ? (
           <PluginDetailsModal
             record={detailsRecord}

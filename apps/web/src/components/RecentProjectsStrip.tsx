@@ -1,3 +1,4 @@
+import { useBatchProjectShareCount } from '../pruned-shims';
 import { openExternalUrl } from "../providers/registry";
 import { compareRecentProjects } from '../lib/project-order';
 import { reportProjectFailure } from '../observability/experience-diagnostics';
@@ -33,7 +34,6 @@ import type { IconName } from './Icon';
 import { RemixIcon } from './RemixIcon';
 import { ProjectDeleteConfirmDialog } from './project-actions/ProjectDeleteConfirmDialog';
 import { useProjectDeleteFlow } from './project-actions/useProjectDeleteFlow';
-import { useBatchProjectShareCount } from './project-actions/useBatchProjectShareCount';
 import { useProjectDuplicateFlow } from './project-actions/useProjectDuplicateFlow';
 import { useWorkspaceProjectMove } from './project-actions/useWorkspaceProjectMove';
 import { isDesignSystemProject } from './design-system-project';

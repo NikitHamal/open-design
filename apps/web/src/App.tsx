@@ -1,7 +1,6 @@
-import { ReferralEntryProvider } from './components/ReferralEntry';
-import { WorkspaceRemovalBoundary } from './components/WorkspaceRemovalBoundary';
+import { AMR_LOGIN_STATUS_EVENT, HomeAmrBalanceGateBlock, ObservedPublicShareLink, ObservedShareUpdateRequest, ShareLoginReturn, amrLoginStatusEventReason, isAmrSessionAuthenticated, observeTestRuntimeIdentity, useDeletedShareNotices } from './pruned-shims';
+
 import { homeAutoSendIdentity, type HomeRequestConcurrencyRejection } from './runtime/home-auto-send-identity';
-import { AmrConcurrencyDialog } from './components/AmrConcurrencyDialog';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { AnimatePresence, motion, MotionConfig } from 'motion/react';
@@ -47,10 +46,6 @@ import type {
   OptimisticProjectCreationHandoff,
   ProjectTitleHint,
 } from './components/EntryShell';
-import {
-  HomeAmrBalanceGateDialogs,
-  type HomeAmrBalanceGateBlock,
-} from './components/HomeAmrBalanceGateDialogs';
 import type { IntegrationTab } from './components/IntegrationsView';
 import { MarketplaceView } from './components/MarketplaceView';
 import { PluginDetailView } from './components/PluginDetailView';
@@ -60,8 +55,6 @@ import {
   memoryToastSubscriptionMode,
 } from './components/MemoryToast';
 import { Toast } from './components/Toast';
-import { DeletedShareNotices } from './components/project-actions/DeletedShareNotices';
-import { useDeletedShareNotices } from './components/project-actions/useDeletedShareNotices';
 import { CenteredLoader } from './components/Loading';
 import { PetOverlay, type PetTaskCenter } from './components/pet/PetOverlay';
 import { buildPetTaskCenter } from './components/pet/taskCenter';
@@ -71,15 +64,8 @@ import {
   type ProjectRenameFenceToken,
   type ProjectNameAuthorityResolution,
 } from './components/ProjectView';
-import type { ObservedPublicShareLink, ObservedShareUpdateRequest } from './components/share/observed-public-share-link';
-import type { ShareLoginReturn } from './components/share/share-login-return';
-import { SignedOutObservedShare } from './components/share/SignedOutObservedShare';
 import { projectsForWorkspaceChrome } from './runtime/workspace-chrome-projects';
-import { AmrArtifactUpgradeGate } from './components/AmrArtifactUpgradeGate';
-import { ExperienceSurvey } from './components/ExperienceSurvey';
 import { TooltipLayer } from './components/TooltipLayer';
-import { UpdateDialog } from './components/UpdateDialog';
-import { UpdaterPopup } from './components/UpdaterPopup';
 import {
   clearSavedWorkspaceTabs,
   openWorkspaceTab,
@@ -87,7 +73,6 @@ import {
   WorkspaceTabsBar,
 } from './components/WorkspaceTabsBar';
 import { WorkspaceTopRightAccountCluster } from './components/EntryNavRail';
-import { ProjectWorkspaceRecoveryTip } from './components/ProjectWorkspaceRecoveryTip';
 import {
   DesignSystemCreationFlow,
   DesignSystemDetailView,
@@ -103,9 +88,6 @@ import {
   type SettingsSection,
   type SettingsHighlight,
 } from './components/SettingsDialog';
-import { PrivacyConsentModal } from './components/PrivacyConsentModal';
-import { TestCampaignModal, observeTestRuntimeIdentity } from './components/TestCampaignModal';
-import { ProductionCampaignModal } from './components/ProductionCampaignModal';
 import {
   clearHomeComposerAttachments,
   stashHomeComposerAttachments,
@@ -131,11 +113,6 @@ import {
   listProjectRunsWithScope,
   type VelaLoginStatus,
 } from './providers/daemon';
-import {
-  AMR_LOGIN_STATUS_EVENT,
-  amrLoginStatusEventReason,
-  isAmrSessionAuthenticated,
-} from './components/amrLoginPolling';
 import { CollabDemoView } from './collab/CollabDemoView';
 import {
   WorkspaceMemberDirectoryPreloader,
@@ -167,7 +144,6 @@ import {
 } from './collab/useProjectRouteWorkspaceContext';
 import { resolvePlanTier } from './collab/team-plan';
 import { deriveTabIdentityScope, UNSET_ACCOUNT_BUCKET } from './collab/tab-scope';
-import { CommunityView } from './components/CommunityView';
 import { seedHomeComposerPrompt } from './components/HomeView';
 import {
   createPluginUseHandoff,
@@ -982,7 +958,7 @@ export function App() {
     <MotionConfig reducedMotion="user">
       <IframeKeepAliveProvider>
         <WorkspaceMemberDirectoryPreloader />
-        <WorkspaceRemovalBoundary><AppInner /></WorkspaceRemovalBoundary>
+        
       </IframeKeepAliveProvider>
     </MotionConfig>
   );
@@ -5816,76 +5792,7 @@ function AppInner() {
     appMain = <CollabDemoView projectId={route.projectId} />;
   } else if (route.kind === 'community') {
     appMain = (
-      <CommunityView
-        onRemixTemplate={({ templateId, prompt }: any) => {
-          // Remix carries the template's PROJECT along, not just its prompt:
-          // duplicate the plugin's example artifact into a fresh project,
-          // seed the composer with the template prompt, then open it on the
-          // copied entry file (keep in sync with the EntryShell-embedded
-          // community tab). Templates without a duplicable artifact fall
-          // back to the old prompt-only project.
-          void (async () => {
-            const name = summarizeProjectNameFromPrompt(prompt) || t('common.untitled');
-            try {
-              // One resolved authority for BOTH requests: the create binds the
-              // copied project to this workspace, and the seed patch is then
-              // authorized against that same binding. A headerless create is
-              // read by the daemon as a legacy caller and leaves the project
-              // bound to no workspace at all, which is what kept remixed
-              // projects out of the member's own 草稿 list.
-              const writeContext = resolvedWorkspaceContextForWrite(workspaceContextState);
-              const result = await duplicatePluginAsProject(templateId, { name }, writeContext);
-              const seeded = await patchProject(
-                result.projectId,
-                { pendingPrompt: prompt },
-                writeContext,
-              );
-              if (!seeded) {
-                // The project itself exists and is bound — only the prompt seed
-                // was refused. Keep the user on it (retrying through the catch
-                // below would leave the copy orphaned and create a second,
-                // empty project) and surface the dropped seed instead of
-                // discarding it silently.
-                console.error('Community remix: could not seed the template prompt.');
-              }
-              navigate({
-                kind: 'project',
-                projectId: result.projectId,
-                conversationId: result.conversationId,
-                fileName: result.relPath,
-              });
-            } catch {
-              await handleCreateProject({
-                name,
-                skillId: null,
-                designSystemId: null,
-                metadata: { kind: 'other', nameSource: 'prompt' },
-                pendingPrompt: prompt,
-              });
-            }
-          })();
-        }}
-        onUsePrompt={(target: any) => {
-          seedHomeComposerPrompt(target.prompt);
-          stashHomePromptHandoff(createPluginUseHandoff(Date.now(), target.templateId, {
-            action: 'use',
-            chipId: target.chipId,
-            projectKind: target.projectKind,
-          }));
-          navigate({ kind: 'home', view: 'home' });
-        }}
-        onUsePlugin={(record: any, action: any, target: any) => {
-          stashHomePromptHandoff(createPluginUseHandoff(Date.now(), record.id, {
-            action,
-            chipId: target.chipId,
-            projectKind: target.projectKind,
-            asExample: target.asExample,
-            // Community records its own use click.
-            useTracked: true,
-          }));
-          navigate({ kind: 'home', view: 'home' });
-        }}
-      />
+      null
     );
   } else if (route.kind === 'design-system-create') {
     appMain = (
@@ -5961,23 +5868,13 @@ function AppInner() {
         ? observedPublicShareLink : null;
     const signedOutShareFallback = signedOutObservedShare ? (
       <div className="entry-shell entry-shell--no-header">
-        <SignedOutObservedShare
-          url={signedOutObservedShare.url}
-          canUpdate={signedOutObservedShare.freshness === 'outdated'}
-          onLoginUpdateSuccess={() => {
-            if (signedOutObservedShare.freshness !== 'outdated') return;
-            setLoginUpdateRequest({
-              nonce: ++loginUpdateNonceRef.current, accountId: signedOutObservedShare.accountId,
-              link: signedOutObservedShare, expiresAt: Date.now() + 60_000,
-            });
-          }}
-        />
+        
       </div>
     ) : null;
     const localObservedShare = observedPublicShareLink
       && activeProject?.id === observedPublicShareLink.projectId
       && route.kind === 'project' && route.fileName === observedPublicShareLink.filePath
-      && activeProject.workspaceId === null && activeProjectWorkspaceContext === null
+      && activeProject?.workspaceId === null && activeProjectWorkspaceContext === null
       && amrLoginStatus?.loggedIn === false && amrLoginStatus.loginInFlight !== true
         ? observedPublicShareLink : null;
     // A Home send's project is ProjectView from the click (OPEND-3334): the
@@ -6239,88 +6136,7 @@ function AppInner() {
     );
   }
   return (
-    <ReferralEntryProvider accountId={isAmrSessionAuthenticated(amrLoginStatus) ? amrLoginStatus?.user?.id ?? amrLoginStatus?.credentialRevision ?? null : null} profile={amrLoginStatus?.profile ?? null}>
-      <div
-        className={`workspace-shell workspace-shell--${clientType}`}
-        data-client-type={clientType}
-        data-host-platform={hostPlatform}
-      >
-        <WorkspaceTabsBar
-          key={workspaceTabsReset}
-          route={route}
-          // The ambient list may still be loading (or belong to a different
-          // selected Workspace) while a deep-linked project is already open.
-          // Supply only that route-owned row to chrome; never insert it into
-          // the ambient Home catalogue.
-          projects={workspaceChromeProjects}
-          activeProjectWorkspaceId={
-            route.kind === 'project' && activeProject
-              ? activeProject.workspaceId ?? null
-              : undefined
-          }
-          preserveSignedOutShareRoute={Boolean(observedPublicShareLink
-            && route.kind === 'project' && route.projectId === observedPublicShareLink.projectId
-            && route.fileName === observedPublicShareLink.filePath
-            && amrLoginStatus?.loggedIn === false && amrLoginStatus.loginInFlight !== true)}
-          onboardingCompleted={config.onboardingCompleted === true}
-          identityScopeKey={workspaceTabsIdentityScopeKey}
-          workspaceContext={workspaceContext}
-          onRenameProject={handleRenameProject}
-          onDuplicateProject={handleDuplicateProject}
-          onDeleteProject={handleDeleteProject}
-        />
-        <div className="workspace-shell__body">
-          {appMain}
-        </div>
-      </div>
-      <TooltipLayer />
-      <UpdateDialog />
-      <AnimatePresence>
-      {settingsOpen ? (
-        renderSettingsSurface('modal')
-      ) : null}
-      </AnimatePresence>
-      <MemoryToast
-        onOpenMemory={() => openSettings('memory')}
-        subscriptionMode={memoryToastSubscriptionMode({
-          routeKind: route.kind,
-          projectRunActive:
-            route.kind === 'project'
-            && projectRunActivity.projectId === route.projectId
-            && projectRunActivity.active,
-          memorySurfaceOpen:
-            settingsInitialSection === 'memory'
-            && (
-              settingsOpen
-              || (route.kind === 'home' && route.view === 'settings')
-            ),
-        })}
-      />
-      {workingDirError ? (
-        <Toast
-          message={workingDirError}
-          role="alert"
-          onDismiss={() => setWorkingDirError(null)}
-        />
-      ) : null}
-      {projectCreateError ? (
-        <Toast
-          message={projectCreateError.split('\n')[0] ?? projectCreateError}
-          details={projectCreateError.includes('\n') ? projectCreateError.slice(projectCreateError.indexOf('\n') + 1) : null}
-          role="alert"
-          tone="error"
-          onDismiss={() => setProjectCreateError(null)}
-        />
-      ) : null}
-      {projectOpenError ? (
-        <Toast
-          message={projectOpenError}
-          role="alert"
-          tone="error"
-          onDismiss={() => setProjectOpenError(null)}
-        />
-      ) : null}
-    </ReferralEntryProvider>
+    null
   );
 }
 

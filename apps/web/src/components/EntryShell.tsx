@@ -1,4 +1,5 @@
-import { useRegistrationInvite } from './useRegistrationInvite';
+import { AMR_LOGIN_POLL_INTERVAL_MS, HomeAmrBalanceGateBlock, amrLoginPollOutcome, closeAmrActivationWindowBestEffort, isAmrSessionAuthenticated, notifyAmrLoginStatusChanged, requiresAmrReauthentication, resolveDeepSeekV4FlashCampaignAudience, resolveEntryRailAccountFooterState, useDeepSeekV4FlashCampaignVisibility, useRegistrationInvite } from '../pruned-shims';
+
 // EntryShell — the centered-hero entry layout.
 //
 // This component owns the entire JSX render and local UI state for
@@ -104,21 +105,7 @@ import {
   buildProjectSearchCatalog,
   ProjectSearchModal,
 } from './ProjectSearchModal';
-import {
-  CloudSignInTip,
-  RailAccountRecoveryTip,
-  RailAccountSyncTip,
-} from './CloudSignInTip';
-import {
-  resolveEntryRailAccountFooterState,
-  requiresAmrReauthentication,
-} from './entry-rail-account-state';
 import { LibrarySection } from './LibrarySection';
-import { UpdaterPopup } from './UpdaterPopup';
-import { WhatsNewPopup } from './WhatsNewPopup';
-import { DeepSeekHarnessSetupDialog } from './DeepSeekHarnessSetupDialog';
-import type { HomeAmrBalanceGateBlock } from './HomeAmrBalanceGateDialogs';
-import { AmrConcurrencyDialog } from './AmrConcurrencyDialog';
 import { readAmrRequestConcurrency } from '../runtime/amr-request-concurrency';
 import {
   amrBalanceBlockedDialog,
@@ -135,9 +122,7 @@ import {
   type AmrBalanceGateScope,
 } from '../runtime/amr-balance-gate';
 import { cachedHomeAmrFundingBlock, checkAmrFundingFeedback, confirmHomeAmrFundingAvailable, invalidateAmrFundingFeedback, noteHomeAmrFundingBlockPresented, readSendTimeAmrFundingEvidence, recentHomeAmrFundingInsufficiency, retireHomeAmrFundingBlock, takeHomeAmrFundingFastBlock } from '../runtime/amr-funding-feedback';
-import { ReferralNotice } from './ReferralNotice';
 import { HomeView, seedHomeComposerPrompt } from './HomeView';
-import { HomeInviteSurface, HomeInviteTrigger } from './HomeInviteSurface';
 import { entryStrategyRoutingFields } from './entry-strategy-routing';
 import { EntryBlankState } from './EntryBlankState';
 import { RecentProjectsStrip, type ProjectCollectionScope } from './RecentProjectsStrip';
@@ -159,8 +144,6 @@ import {
   effectiveAgentModelId,
 } from './agentModelSelection';
 import { AgentIcon } from './AgentIcon';
-import { CommunityView } from './CommunityView';
-import { TeamSlotPlaceholder } from './TeamSlotPlaceholder';
 import {
   notifyTeamProjectsChanged,
   notifyWorkspaceBillingRefresh,
@@ -177,11 +160,6 @@ import {
 } from '../collab/useWorkspaceContext';
 import { useWorkspaceInvalidation } from '../collab/workspace-events';
 import { resolvePlanLabelTier } from '../collab/team-plan';
-import { resolveDeepSeekV4FlashCampaignAudience } from '../campaigns/deepseek-v4-flash';
-import { useDeepSeekV4FlashCampaignVisibility } from '../campaigns/use-deepseek-v4-flash-campaign';
-import { WorkbenchCampaignBadge } from './WorkbenchCampaignBadge';
-import { canRenderProductionCampaignBadge, ProductionCampaignBadge } from './ProductionCampaignBadge';
-import { ProductionCampaignHover } from './ProductionCampaignHover';
 import {
   beginWorkspaceScopedRead,
   workspaceIdentityCacheKey,
@@ -235,13 +213,6 @@ import {
   startVelaLogin,
   type VelaLoginStatus,
 } from '../providers/daemon';
-import {
-  AMR_LOGIN_POLL_INTERVAL_MS,
-  amrLoginPollOutcome,
-  isAmrSessionAuthenticated,
-  notifyAmrLoginStatusChanged,
-} from './amrLoginPolling';
-import { closeAmrActivationWindowBestEffort } from './AmrLoginPill';
 import { isMacPlatform } from '../utils/platform';
 import { smoothScrollToTop } from '../utils/smoothScrollToTop';
 import { summarizeProjectNameFromPrompt } from '../utils/projectName';
@@ -260,7 +231,6 @@ import {
 } from './entryRailBridge';
 import { resolveByokModelPreference } from './byok/validation';
 const onboardingWelcomeStyles: Record<string, string> = {};
-import { AmrActivationHintText } from './AmrActivationHintText';
 
 // How long a cloud sign-in waits for the browser before offering to reopen it.
 const ACTIVATION_HINT_DELAY_MS = 5000;
@@ -752,11 +722,11 @@ export function EntryShell({
   }, [amrAuthRequired, amrLoggedIn, usesOpenDesignCloud, view]);
   let accountFooterNotice: ReactNode = null;
   if (accountFooterState === 'syncing') {
-    accountFooterNotice = <RailAccountSyncTip />;
+    accountFooterNotice = null;
   } else if (accountFooterState === 'recovering') {
-    accountFooterNotice = <RailAccountRecoveryTip />;
+    accountFooterNotice = null;
   } else if (accountFooterState === 'sign-in') {
-    accountFooterNotice = <CloudSignInTip />;
+    accountFooterNotice = null;
   }
   const workspaceContextRef = useRef(workspaceContext);
   workspaceContextRef.current = workspaceContext;
@@ -2009,14 +1979,7 @@ export function EntryShell({
   // the shell only supplies the host, which renders nothing until the real
   // updater reports a downloaded, unopened installer.
   const updaterSlot = (
-    <UpdaterPopup
-      allowSilentUpdates={config.allowSilentUpdates}
-      silentUpdatePreferenceReady={daemonAppConfigReady}
-      onAllowSilentUpdatesChange={
-        onSilentUpdatePreferenceChange
-          ?? ((allowSilentUpdates) => onConfigPersist({ ...config, allowSilentUpdates }))
-      }
-    />
+    null
   );
 
   // #5517 removes the entry top-bar settings cog: the nav-rail account menu owns
@@ -2205,7 +2168,7 @@ export function EntryShell({
               the workspace tabs bar (entryRailBridge), the updater popup host
               lives in the rail footer, and everything below is fixed-position
               or portalled so it occupies no layout space here. */}
-          <WhatsNewPopup active={view === 'home' && !goPlanSunsetMessagePending} />
+          
           {/* The campaign badge lives in EntryNavRail's top-right cluster so it
               stays beside the account module across every entry tab. */}
           <div
@@ -2218,8 +2181,8 @@ export function EntryShell({
               <HomeView
                 {...homeViewProps}
                 isActive={view === 'home'}
-                referralNotice={<ReferralNotice accountId={amrLoggedIn === true ? amrAccountId : null} profile={amrRegistrationStatus?.profile?.trim() || amrProfile} consoleOrigin={amrRegistrationStatus?.consoleOrigin} active={view === 'home'} context={homeFundingContext} billing={workspaceBillingResponse} />}
-                inviteSurface={<HomeInviteSurface signedOut={amrLoggedIn === false} identityReady={!workspaceContextState.loading && !workspaceContextState.identityChangePending && !workspaceContextState.failure} accountId={amrLoggedIn === true ? amrAccountId : null} context={railWorkspaceContext} active={view === 'home'} onSignInRequested={() => { setInviteSignInRequest('start'); navigate({ kind: 'home', view: 'onboarding' }); }} openAfterSignIn={inviteSignInRequest === 'waiting'} onSignInInviteConsumed={() => setInviteSignInRequest(null)} />}
+                referralNotice={null}
+                inviteSurface={null}
                 /* Home is the one composer in the shell and consumes the page
                    handoff. The community view used to dock a second HomeView
                    (`variant="dock"`) with a handoff of its own; that mount
@@ -2331,89 +2294,7 @@ export function EntryShell({
               />
             ) : null}
             {view === 'community' ? (
-              <CommunityView
-                onRemixTemplate={({ templateId, prompt }: any) => {
-                  // Remix carries the template's PROJECT along, not just its
-                  // prompt: duplicate the plugin's example artifact into a
-                  // fresh project (the same daemon flow as the plugin
-                  // gallery's 创建副本), seed the composer with the template
-                  // prompt for review, then open it on the copied entry file.
-                  // Templates without a duplicable artifact fall back to the
-                  // old prompt-only project.
-                  void (async () => {
-                    const name =
-                      summarizeProjectNameFromPrompt(prompt) || t('common.untitled');
-                    try {
-                      // One resolved authority for BOTH requests: the create
-                      // binds the copied project to this workspace, and the
-                      // seed patch is then authorized against that same
-                      // binding. A headerless create is read by the daemon as a
-                      // legacy caller and leaves the project bound to no
-                      // workspace at all, which is what kept remixed projects
-                      // out of the member's own 草稿 list.
-                      const writeContext =
-                        resolvedWorkspaceContextForWrite(workspaceContextState);
-                      const result = await duplicatePluginAsProject(
-                        templateId,
-                        { name },
-                        writeContext,
-                      );
-                      const seeded = await patchProject(
-                        result.projectId,
-                        { pendingPrompt: prompt },
-                        writeContext,
-                      );
-                      if (!seeded) {
-                        // The project itself exists and is bound — only the
-                        // prompt seed was refused. Keep the user on it
-                        // (retrying through the catch below would leave the
-                        // copy orphaned and create a second, empty project)
-                        // and surface the dropped seed instead of discarding
-                        // it silently.
-                        console.error('Community remix: could not seed the template prompt.');
-                      }
-                      await Promise.resolve(onOpenProject(result.projectId, result.relPath));
-                    } catch {
-                      await onCreateProject({
-                        name,
-                        skillId: null,
-                        designSystemId: null,
-                        metadata: { kind: 'other', nameSource: 'prompt' },
-                        pendingPrompt: prompt,
-                      });
-                    }
-                  })();
-                }}
-                onUsePrompt={(target: any) => {
-                  // Hands off to Home (OPEND-2793, product decision B): the
-                  // community view no longer docks a composer at its foot —
-                  // that bar had no relation to the gallery, the filters or
-                  // the card under it, and phase three will bring it back in
-                  // a template-bound shape. Same seed + binding pair the
-                  // standalone /community route in App.tsx uses, so Use
-                  // lands the prompt AND the plugin driver in Home's composer.
-                  seedHomeComposerPrompt(target.prompt);
-                  setHomePromptHandoff(createPluginUseHandoff(Date.now(), target.templateId, {
-                    action: 'use',
-                    chipId: target.chipId,
-                    projectKind: target.projectKind,
-                  }));
-                  changeView('home');
-                }}
-                // The gallery card's full details modal routes Use through the
-                // same Home hand-off the plugin library uses, so the plugin
-                // becomes the composer's active driver instead of only seeding
-                // prompt text.
-                onUsePlugin={(record: any, action: any, target: any) => {
-                  usePluginFromLibrary(record, action, {
-                    chipId: target.chipId,
-                    projectKind: target.projectKind,
-                    asExample: target.asExample,
-                    // Community records its own use click.
-                    useTracked: true,
-                  });
-                }}
-              />
+              null
             ) : null}
             {/* Team destinations — the entry shell owns the nav frame only; each
                 view is provided by another lane (B = members/board, D = team
@@ -2482,13 +2363,13 @@ export function EntryShell({
               )
             ) : null}
             {view === 'members' ? (
-              <TeamSlotPlaceholder icon="users" title={t('entry.navMembers')} />
+              null
             ) : null}
             {view === 'board' ? (
-              <TeamSlotPlaceholder icon="kanban" title={t('entry.navBoard')} />
+              null
             ) : null}
             {view === 'workspace-settings' ? (
-              <TeamSlotPlaceholder icon="settings" title={t('entry.navWorkspaceSettings')} />
+              null
             ) : null}
           </div>
         </main>
@@ -4064,7 +3945,7 @@ function OnboardingView({
                 <p className={onboardingWelcomeStyles.activationHint}>
                   <span>
                     {amrStatus?.browserOpenFailed ? (
-                      <AmrActivationHintText browserOpenFailed />
+                      null
                     ) : (
                       t('settings.onboardingActivationPrompt')
                     )}
@@ -4281,14 +4162,7 @@ function OnboardingView({
         </div>
       </div>
       {dshSetup ? (
-        <DeepSeekHarnessSetupDialog
-          busy={dshSetup.busy}
-          error={dshSetup.error}
-          onCancel={() => {
-            if (!dshSetup.busy) setDshSetup(null);
-          }}
-          onConfirm={() => void confirmDshSetup()}
-        />
+        null
       ) : null}
     </section>
   );

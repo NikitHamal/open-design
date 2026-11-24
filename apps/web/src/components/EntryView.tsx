@@ -1,3 +1,4 @@
+import { HomeAmrBalanceGateBlock } from '../pruned-shims';
 import {
   useCallback,
   useEffect,
@@ -36,7 +37,6 @@ import {
   type OptimisticProjectCreationHandoff,
   type ProjectTitleHint,
 } from './EntryShell';
-import type { HomeAmrBalanceGateBlock } from './HomeAmrBalanceGateDialogs';
 import type { IntegrationTab } from './IntegrationsView';
 import type { CreateInput, ImportClaudeDesignOutcome } from './NewProjectPanel';
 import {

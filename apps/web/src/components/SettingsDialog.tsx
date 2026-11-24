@@ -1,3 +1,4 @@
+import { AMR_LOGIN_STATUS_EVENT, amrLoginStatusEventReason, isAmrSessionAuthenticated, planBadgeTierForWorkspace } from '../pruned-shims';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, Dispatch, SetStateAction } from 'react';
 import { Button, VisuallyHidden } from '@open-design/components';
@@ -43,15 +44,7 @@ import type { Locale } from '../i18n';
 import type { Dict } from '../i18n/types';
 import { AgentIcon } from './AgentIcon';
 import { AgentDiagnosticRow } from './AgentDiagnosticRow';
-import { DeepSeekHarnessSetupDialog } from './DeepSeekHarnessSetupDialog';
-import { AmrLoginPill } from './AmrLoginPill';
-import { PlanBadge } from './PlanBadge';
 import { orderAgentsWithOpenDesignFirst } from './agentOrdering';
-import {
-  AMR_LOGIN_STATUS_EVENT,
-  amrLoginStatusEventReason,
-  isAmrSessionAuthenticated,
-} from './amrLoginPolling';
 import {
   fetchAmrWalletSnapshot,
   fetchVelaLoginStatus,
@@ -65,7 +58,6 @@ import {
   deepSeekHarnessNeedsSetup,
   isVisibleLocalCliAgent,
 } from '../utils/visibleAgents';
-import { ExportDiagnosticsRow } from './ExportDiagnosticsButton';
 import { Icon } from './Icon';
 import { LabsSection } from './LabsSection';
 import { LABS_EXPERIMENTS } from './labs-experiments';
@@ -144,7 +136,6 @@ import { MEDIA_PROVIDERS } from '../media/models';
 import { useByokImageModelOptions, useByokVideoModelOptions, useByokSpeechModelOptions } from '../media/aihubmix-image-models';
 import { isVisualStabilityMode } from '../utils/visualStability';
 import { byokProviderRequiresApiKey } from '../utils/byokProvider';
-import { XaiOAuthControl } from './XaiOAuthControl';
 import type { MediaProvider } from '../media/models';
 import { Toast } from './Toast';
 import {
@@ -166,7 +157,6 @@ import {
 import { PetSettings } from './pet/PetSettings';
 import { McpClientSection } from './McpClientSection';
 import { DesignSystemsSection } from './DesignSystemsSection';
-import { PrivacySection } from './PrivacySection';
 import { ProjectLocationsSection } from './ProjectLocationsSection';
 import { RoutinesSection } from './RoutinesSection';
 import { SettingsWorkspaceSection } from './SettingsWorkspaceSection';
@@ -177,7 +167,6 @@ import {
   workspaceBillingSummaryForContext,
 } from '../collab/useWorkspaceContext';
 import { canUpgradeFromPlanTier, resolvePlanTier } from '../collab/team-plan';
-import { planBadgeTierForWorkspace } from './PlanWordmark';
 import { workspaceUpgradeUrl } from './EntryNavRail';
 import { canShowWorkspaceSettings } from '../collab/settings-access';
 import { ConnectorsBrowser } from './ConnectorsBrowser';
@@ -4560,21 +4549,7 @@ export function SettingsDialog({
                       identity, so signing in here is that one flow. This used to
                       navigate to onboarding, which walked the user through the
                       whole first-run tour to reach the same authorization. */}
-                  <AmrLoginPill
-                    className="settings-cloud-signin-callout__button"
-                    hideSignedOutStatus
-                    hideSignedInStatus
-                    initialStatus={amrCardStatus}
-                    skipInitialRefresh
-                    signInLabel={t('entry.cloudCreditsCta')}
-                    signInIcon="log-in"
-                    revealPendingCancelAction
-                    amrEntrySourceDetail="settings_cloud_callout"
-                    metricsConsent={cfg.telemetry?.metrics === true}
-                    installationId={cfg.installationId}
-                    onStatusChange={setAmrCardStatus}
-                    onSignedOut={onAmrSignedOut}
-                  />
+                  
                 </div>
               ) : null}
               {cfg.mode === 'api' ? (
@@ -4970,16 +4945,7 @@ export function SettingsDialog({
                                               className="agent-card-plan-badge-slot"
                                               aria-hidden="true"
                                             >
-                                              <PlanBadge
-                                                plan={amrCardPlanLabel}
-                                                size="sm"
-                                                className="agent-card-plan-badge"
-                                                title={
-                                                  amrCardPlanLabel
-                                                    ? `${t('settings.amrPlan')} ${amrCardPlanLabel}`
-                                                    : undefined
-                                                }
-                                              />
+                                              
                                             </span>
                                           ) : null}
                                           {amrCardProfileBadge ? (
@@ -5075,29 +5041,7 @@ export function SettingsDialog({
                                           {t('settings.amrUpgrade')}
                                         </button>
                                       ) : null}
-                                      <AmrLoginPill
-                                        className={
-                                          'agent-card-amr-auth'
-                                          + (amrCardSignedIn
-                                            ? ''
-                                            : ' settings-cloud-signin-callout__button')
-                                        }
-                                        hideSignedOutStatus
-                                        hideSignedInStatus
-                                        initialStatus={amrCardStatus}
-                                        workspaceId={workspaceContext?.workspaceId}
-                                        skipInitialRefresh
-                                        signInLabel={t('entry.cloudCreditsCta')}
-                                        signInIcon="log-in"
-                                        showConsoleAction={amrCardSignedIn}
-                                        iconOnlySignOut
-                                        amrEntrySourceDetail="settings_amr_authorize"
-                                        metricsConsent={cfg.telemetry?.metrics === true}
-                                        installationId={cfg.installationId}
-                                        revealPendingCancelAction={amrRevealPendingCancelAction}
-                                        onStatusChange={setAmrCardStatus}
-                                        onSignedOut={onAmrSignedOut}
-                                      />
+                                      
                                     </span>
                                   ) : (
                                     <div
@@ -6100,7 +6044,7 @@ export function SettingsDialog({
           ) : null}
 
           {activeSection === 'privacy' ? (
-            <PrivacySection cfg={cfg} setCfg={setCfg} />
+            null
           ) : null}
 
           {activeSection === 'about' ? (
@@ -6287,7 +6231,7 @@ export function SettingsDialog({
                   <h4>{t('diagnostics.exportTitle')}</h4>
                   <p className="hint">{t('diagnostics.exportHint')}</p>
                 </div>
-                <ExportDiagnosticsRow />
+                
               </div>
               <div className="settings-about-diagnostics">
                 <div className="settings-about-diagnostics-text">
@@ -6320,14 +6264,7 @@ export function SettingsDialog({
       <div className="settings-page-shell">
         {surface}
         {dshSetup ? (
-          <DeepSeekHarnessSetupDialog
-            busy={dshSetup.busy}
-            error={dshSetup.error}
-            onCancel={() => {
-              if (!dshSetup.busy) setDshSetup(null);
-            }}
-            onConfirm={() => void handleConfirmDshSetup()}
-          />
+          null
         ) : null}
       </div>
     );
@@ -6337,14 +6274,7 @@ export function SettingsDialog({
     <div className="modal-backdrop" onClick={onClose}>
       {surface}
       {dshSetup ? (
-        <DeepSeekHarnessSetupDialog
-          busy={dshSetup.busy}
-          error={dshSetup.error}
-          onCancel={() => {
-            if (!dshSetup.busy) setDshSetup(null);
-          }}
-          onConfirm={() => void handleConfirmDshSetup()}
-        />
+        null
       ) : null}
     </div>
   );
@@ -8028,7 +7958,7 @@ function MediaProvidersSection({
               ) : null}
             </div>
           </div>
-          {activeProvider.id === 'grok' ? <XaiOAuthControl /> : null}
+          {activeProvider.id === 'grok' ? null : null}
           {activeRequiresCredentials ? (
             <div className="media-provider-detail-grid">
               <label className="media-provider-detail-field">

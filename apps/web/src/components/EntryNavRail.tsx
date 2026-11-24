@@ -1,7 +1,6 @@
-import { ReferralEntry } from './ReferralEntry';
+import { moveConfirmSkipped, planBadgeTierForWorkspace, resolveDeepSeekV4FlashCampaignAudience, useDeepSeekV4FlashCampaignVisibility, useGithubStars } from '../pruned-shims';
+
 import { openExternalUrl } from "../providers/registry";
-import { CodingPlanUsage } from './CodingPlanUsage';
-import { WorkspaceQuotaPopover } from './WorkspaceQuotaPopover';
 import { workspaceQuotaView } from '../collab/workspace-quota-view';
 import planCardStyles from './PersonalPlanCard.module.css';
 import styles from './EntryNavRail.module.css';
@@ -68,21 +67,14 @@ import {
   velaLogout,
   type VelaLoginStatus,
 } from '../providers/daemon';
-import { resetCloudSignInTipDismissal } from './CloudSignInTip';
-import { SignOutConfirmDialog } from './SignOutConfirmDialog';
-import { notifyAmrLoginStatusChanged } from './amrLoginPolling';
 import { Icon } from './Icon';
-import { GITHUB_STARS_FALLBACK_LABEL, formatStars, useGithubStars } from './useGithubStars';
-import { PlanWordmark, planBadgeTierForWorkspace } from './PlanWordmark';
 import { MarqueeLabel } from './MarqueeLabel';
 import { RemixIcon } from './RemixIcon';
-import { InviteDialog } from './InviteDialog';
 import {
   closeRailRecentRowMenu,
   openRailRecentRowMenu,
   RailRecentRow,
 } from './entry-nav-rail/RailRecentRow';
-import { MoveToTeamConfirmDialog, moveConfirmSkipped } from './MoveToTeamConfirmDialog';
 import { ProjectDeleteConfirmDialog } from './project-actions/ProjectDeleteConfirmDialog';
 import { projectOwnedBySelf } from './project-actions/ownership';
 import { useProjectDeleteFlow } from './project-actions/useProjectDeleteFlow';
@@ -90,7 +82,6 @@ import { useProjectDuplicateFlow } from './project-actions/useProjectDuplicateFl
 import { useWorkspaceProjectMove } from './project-actions/useWorkspaceProjectMove';
 import type { SharedProjectPredicate } from '../collab/all-projects-list';
 import { acknowledgeProjectCompletion, useProjectRunStatuses } from '../hooks/useProjectRunStatuses';
-import { MessageCenter } from './MessageCenter';
 import type { EntrySettingsSection } from './EntrySettingsMenu';
 import type { Project } from '../types';
 import { isRtlLocale, useI18n } from '../i18n';
@@ -117,8 +108,6 @@ import {
   amrWorkspaceUrl,
 } from '../runtime/amr-guidance';
 import { useWorkspaceInvalidation } from '../collab/workspace-events';
-import { resolveDeepSeekV4FlashCampaignAudience } from '../campaigns/deepseek-v4-flash';
-import { useDeepSeekV4FlashCampaignVisibility } from '../campaigns/use-deepseek-v4-flash-campaign';
 import type { EntryHomeView } from '../router';
 import type {
   AccountMenuClickProps,
@@ -138,7 +127,6 @@ import {
   stableAnalyticsErrorCode,
   workspaceAnalyticsDimensions,
 } from '../analytics/workspace';
-import { WorkbenchCampaignBadge } from './WorkbenchCampaignBadge';
 import { workspaceChromeAccountActionsHost } from './workspaceChromeActions';
 
 /** Gap the account menu keeps from the rail card's top edge — the same inset
@@ -648,15 +636,7 @@ function RailRecentSection({
         />
       ) : null}
       {moveTarget ? (
-        <MoveToTeamConfirmDialog
-          action="to-team"
-          onCancel={() => setMoveTarget(null)}
-          onConfirm={() => {
-            const project = moveTarget;
-            setMoveTarget(null);
-            void moveFlow.shareToTeam(project);
-          }}
-        />
+        null
       ) : null}
     </div>
   );
@@ -1451,7 +1431,7 @@ export function EntryTopRightCluster({
                           fallback for a tier string no wordmark matches —
                           without it the capsule would be empty. */}
                       {planTier ? (
-                        <PlanWordmark tier={planTier} height={16} variant={quotaView.sharedBilling ? 'seats-phase1' : undefined} />
+                        null
                       ) : (
                         <RemixIcon name="battery-charge-line" size={16} />
                       )}
@@ -1472,18 +1452,7 @@ export function EntryTopRightCluster({
                   className={`entry-top-right-credits-panel ${planCardStyles.panel}`}
                   data-testid="entry-top-right-credits-panel"
                 >
-                  <WorkspaceQuotaPopover
-                    view={quotaView}
-                    context={context}
-                    profile={workspaceQuotaStatus?.profile ?? priorityAnnouncementAmrProfile}
-                    consoleOrigin={workspaceQuotaStatus?.consoleOrigin}
-                    badgeTier={planTier}
-                    planLabel={tierLabel}
-                    onNavigate={(action: any) => {
-                      trackAccountAction(action);
-                      setCreditsPanelOpen(false);
-                    }}
-                  />
+                  
                 </div>
               ) : null}
             </div>
@@ -1653,32 +1622,7 @@ export function EntryTopRightCluster({
                   </>
                 ) : null}
                 {confirmSignOut ? (
-                  <SignOutConfirmDialog
-                    email={logoutSnapshot?.user?.email}
-                    busy={logoutBusy}
-                    confirmDisabled={!logoutSnapshot?.credentialRevision}
-                    onCancel={() => setConfirmSignOut(false)}
-                    onConfirm={() => {
-                      if (!logoutSnapshot?.credentialRevision || logoutBusy) return;
-                      setLogoutBusy(true);
-                      void velaLogout({expectedAppUserId:logoutSnapshot.user?.id ?? '',expectedCredentialRevision:logoutSnapshot.credentialRevision}).then(async (result) => {
-                        setLogoutBusy(false);
-                        if (result.status === 409) {setLogoutSnapshot(await fetchVelaLoginStatus());return;}
-                        if (!result.ok) return;
-                        setConfirmSignOut(false);
-                        await onSignedOut?.();
-                        // recvqbkcLqIFH7: a stale "dismissed" flag on the
-                        // footer's CloudSignInTip must not survive a real
-                        // sign-out, or the rail's only sign-in entry point
-                        // silently disappears with nothing left in its place.
-                        resetCloudSignInTipDismissal();
-                        notifyAmrLoginStatusChanged();
-                        notifyWorkspaceContextRefresh();
-                        notifyWorkspaceBillingRefresh();
-                        notifyTeamProjectsChanged();
-                      });
-                    }}
-                  />
+                  null
                 ) : null}
               </div>
             </div>,
@@ -1691,20 +1635,7 @@ export function EntryTopRightCluster({
           its own MessageCenter for that branch, so this one is context-gated
           to keep exactly one instance (and one unread poller) alive. */}
       {context ? (
-        <MessageCenter
-          hideTrigger
-          workspaceId={context.workspaceId}
-          returnFocusRef={messageCenterBellRef}
-          open={messageCenterOpen}
-          onOpenChange={setMessageCenterOpen}
-          onUnreadCountChange={setMessageUnreadCount}
-          onOpenNotificationSettings={onOpenSettings ? () => onOpenSettings('notifications') : undefined}
-          priorityAnnouncementActive={priorityAnnouncementActive}
-          onPriorityAnnouncementPendingChange={onPriorityAnnouncementPendingChange}
-          priorityAnnouncementCurrentPlanId={priorityAnnouncementCurrentPlanId}
-          priorityAnnouncementAmrProfile={priorityAnnouncementAmrProfile}
-          priorityAnnouncementMetricsConsent={priorityAnnouncementMetricsConsent}
-        />
+        null
       ) : null}
     </>
   );
@@ -1789,13 +1720,7 @@ export function WorkspaceTopRightAccountCluster({
       // placement (`opend.home.*`), and a project workbench is not home. The
       // built-in campaign pill is product chrome, not a CMS host, and stays.
       leadingSlot={campaignAudience ? (
-        <WorkbenchCampaignBadge
-          audience={campaignAudience}
-          page="project"
-          metricsConsent={metricsConsent}
-          installationId={installationId}
-          loggedIn={amrLoggedIn}
-        />
+        null
       ) : null}
       updaterSlot={updaterSlot}
       onOpenSettings={onOpenSettings}

@@ -1,3 +1,4 @@
+import { ObservedPublicShareLink, ObservedShareUpdateRequest, ShareLoginReturn, activeFileSharesBeforeDelete, isObservedShareFileSwitch, moveConfirmSkipped, useProjectShareHistoryState } from '../pruned-shims';
 import { useExperienceError } from '../observability/use-experience-error';
 import type { RecoveryActionBlockReason } from '../runtime/chat/recovery-gating';
 import {
@@ -15,8 +16,6 @@ import {
 import { Button } from '@open-design/components';
 import { createPortal } from 'react-dom';
 import type { DesignSystemEditClickProps, TrackingArtifactKind, TrackingProjectKind } from '@open-design/contracts/analytics';
-import { isObservedShareFileSwitch, type ObservedPublicShareLink, type ObservedShareUpdateRequest } from './share/observed-public-share-link';
-import type { ShareLoginReturn } from './share/share-login-return';
 import { useAnalytics } from '../analytics/provider';
 import {
   trackFileManagerClick,
@@ -119,7 +118,6 @@ import {
 } from '../collab/useWorkspaceContext';
 import { useProjectCollabContext } from '../collab/collab-context';
 import { createTerminal, killTerminal, listPlugins, moveWorkspaceProject } from '../state/projects';
-import { MoveToTeamConfirmDialog, moveConfirmSkipped } from './MoveToTeamConfirmDialog';
 import { DesignFilesPanel, type DesignFilesNavState } from './DesignFilesPanel';
 import {
   DesignBrowserPanel,
@@ -137,9 +135,7 @@ import { Icon, type IconName } from './Icon';
 import { projectIsSharedWithWorkspace } from '../collab/project-shared-status';
 import { FileSyncBadge, type FileSyncBadgeState } from '../collab/FileSyncBadge';
 import { Toast } from './Toast';
-import { activeFileSharesBeforeDelete } from './project-actions/activeFileSharesBeforeDelete';
 import { ProjectDeleteConfirmDialog } from './project-actions/ProjectDeleteConfirmDialog';
-import { useProjectShareHistoryState } from './share/useProjectShareHistory';
 import { TabLauncherMenu } from './workspace/TabLauncherMenu';
 import { buildLauncherActions, type LauncherContext } from './workspace/tab-launcher';
 import { SideChatTab, type ActiveConversationChatState } from './workspace/SideChatTab';
@@ -4076,15 +4072,7 @@ export function FileWorkspace({
       data-testid="file-workspace"
     >
       {projectShareConfirm ? (
-        <MoveToTeamConfirmDialog
-          action={projectShareConfirm === 'workspace' ? 'to-team' : 'to-personal'}
-          onCancel={() => setProjectShareConfirm(null)}
-          onConfirm={() => {
-            const next = projectShareConfirm;
-            setProjectShareConfirm(null);
-            if (next) void commitProjectWorkspaceShareAccess(next);
-          }}
-        />
+        null
       ) : null}
       <SketchEnginePrewarm />
       <div className="ws-tabs-shell">

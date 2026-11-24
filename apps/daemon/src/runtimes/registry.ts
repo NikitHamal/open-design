@@ -1,3 +1,4 @@
+import { zeusAgentDef } from './defs/zeus.js';
 import { amrAgentDef } from './defs/amr.js';
 import { claudeAgentDef } from './defs/claude.js';
 import { codexAgentDef } from './defs/codex.js';
@@ -38,6 +39,7 @@ import type { RuntimeAgentDef } from './types.js';
  * `createLocalAgentDef`), so it is always an id we have never heard of.
  */
 export const SHIPPED_AGENT_DEFS: RuntimeAgentDef[] = [
+  zeusAgentDef,
   amrAgentDef,
   claudeAgentDef,
   codexAgentDef,

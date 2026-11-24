@@ -14,6 +14,7 @@ const RUNTIME_PROJECT_ROOT = path.resolve(
 );
 
 const AGENT_BIN_ENV_KEYS = new Map<string, string>([
+  ['zeus', 'ZEUS_BIN'],
   ['amr', 'VELA_BIN'],
   ['aider', 'AIDER_BIN'],
   ['claude', 'CLAUDE_BIN'],
@@ -287,6 +288,13 @@ function packagedBuiltInExecutable(
   def: RuntimeAgentDef,
   configuredEnv: Record<string, string> = {},
 ): string | null {
+  if (def.id === 'zeus') {
+    const { hasOverride } = resolveDetectionHome();
+    if (hasOverride && !process.env.ZEUS_BIN && !configuredEnv.ZEUS_BIN) {
+      return null;
+    }
+    return process.execPath;
+  }
   if (def.id === 'byok-opencode') {
     return resolveAmrOpenCodeExecutable({ ...process.env, ...configuredEnv });
   }

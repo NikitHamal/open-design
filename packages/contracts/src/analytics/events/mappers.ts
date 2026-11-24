@@ -257,6 +257,7 @@ export function agentIdToTracking(agentId: string | null | undefined): TrackingC
     case 'deepseek-harness':
       return 'deepseek_harness';
     case 'amr':
+    case 'zeus':
       return 'amr';
     default:
       return 'other';

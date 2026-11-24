@@ -515,6 +515,280 @@ export async function streamZeusProvider(
     }
   };
 
+let cachedMotifConversationId: string | null = null;
+
+async function streamMotif(
+  req: ChatRequest,
+  onDelta: (t: string) => void,
+  onReasoning: (t: string) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  const normalized = normalizeMultiTurnMessages(req.messages, 10, 5000, 24000);
+  const motifModel = req.model.includes('12.7') || req.model.includes('12-7')
+    ? 'motif-12-7b-reasoning'
+    : 'motif-102b';
+  const eff = req.effort === 'low' ? 'small' : req.effort === 'medium' ? 'medium' : 'high';
+  const sections: string[] = [];
+  if (req.system.trim()) {
+    sections.push(`[System Instructions]\n${req.system.slice(0, 20000)}`);
+  }
+  if (normalized.length > 1) {
+    const hist = normalized
+      .slice(0, -1)
+      .map((m) => `${m.role === 'assistant' ? 'Assistant' : 'User'}: ${m.content.slice(0, 8000)}`)
+      .join('\n\n');
+    sections.push(`[Conversation History]\n${hist}`);
+  }
+  const lastUser = normalized[normalized.length - 1]?.content ?? '';
+  sections.push(`[Current User Request]\n${lastUser}`);
+
+  const res = await fetch('https://chat.motiftech.io/api/v1/enterprise/chat', {
+    method: 'POST',
+    signal,
+    headers: {
+      'User-Agent': CHROME_UA,
+      Accept: 'text/event-stream, application/json',
+      'Content-Type': 'application/json',
+      Origin: 'https://chat.motiftech.io',
+      Referer: 'https://chat.motiftech.io/chat',
+    },
+    body: JSON.stringify({
+      query: sections.join('\n\n'),
+      conversation_id: cachedMotifConversationId,
+      project_id: null,
+      template_id: null,
+      forced_skill_names: [],
+      disabled_skill_names: [],
+      language: 'en',
+      timezone: 'UTC',
+      mode: 'chat',
+      reasoning_effort: eff,
+      model: motifModel,
+    }),
+  });
+  if (!res.ok || !res.body) {
+    throw new Error(`Motif HTTP ${res.status}`);
+  }
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const lines = buf.split('\n');
+    buf = lines.pop() ?? '';
+    for (const line of lines) {
+      const t = line.trim();
+      if (!t.startsWith('data:')) continue;
+      const raw = t.slice(5).trim();
+      try {
+        const ev = JSON.parse(raw);
+        const etype = ev.type ?? '';
+        if (etype === 'chat.reasoning' || etype === 'chat.thinking' || etype === 'chat.thought') {
+          if (typeof ev.data === 'string' && ev.data) onReasoning(ev.data);
+        } else if (etype === 'chat.text') {
+          if (typeof ev.data === 'string' && ev.data) onDelta(ev.data);
+        } else if (etype === 'shared.data.conversation_id') {
+          if (typeof ev.data === 'string' && ev.data) cachedMotifConversationId = ev.data;
+        } else if (etype === 'shared.sign') {
+          return;
+        }
+      } catch {}
+    }
+  }
+}
+
+async function streamLongCat(
+  req: ChatRequest,
+  onDelta: (t: string) => void,
+  onReasoning: (t: string) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  const normalized = normalizeMultiTurnMessages(req.messages, 10, 5000, 24000);
+  const lastUser = normalized[normalized.length - 1]?.content ?? '';
+  const maxSys = Math.max(6000, 26000 - lastUser.length);
+  const sysPrefix = req.system.slice(0, maxSys);
+  const content = sysPrefix.trim() ? `${sysPrefix}\n\n${lastUser}` : lastUser.slice(0, 26000);
+
+  const lcMsgs: Array<Record<string, unknown>> = [];
+  for (const m of normalized.slice(0, -1)) {
+    lcMsgs.push({
+      role: m.role,
+      events: [
+        {
+          type: m.role === 'assistant' ? 'content' : 'userMsg',
+          content: m.content.slice(0, 16000),
+          status: 'FINISHED',
+        },
+      ],
+      chatStatus: 'FINISHED',
+      messageId: 10_000_000 + Math.floor(Math.random() * 89_000_000),
+      idType: 'custom',
+    });
+  }
+  lcMsgs.push({
+    role: 'user',
+    events: [{ type: 'userMsg', content, status: 'FINISHED' }],
+    chatStatus: 'FINISHED',
+    messageId: 10_000_000 + Math.floor(Math.random() * 89_000_000),
+    idType: 'custom',
+  });
+  lcMsgs.push({
+    role: 'assistant',
+    events: [],
+    chatStatus: 'LOADING',
+    messageId: 10_000_000 + Math.floor(Math.random() * 89_000_000),
+    idType: 'custom',
+  });
+
+  const res = await fetch('https://longcat.chat/api/v1/chat-completion-oversea-V2', {
+    method: 'POST',
+    signal,
+    headers: {
+      'User-Agent': CHROME_UA,
+      Accept: 'text/event-stream,application/json',
+      'Content-Type': 'application/json',
+      'x-requested-with': 'XMLHttpRequest',
+      'X-Client-Language': 'en',
+      'm-appkey': 'fe_com.sankuai.friday.fe.longcat',
+      Origin: 'https://longcat.chat',
+      Referer: 'https://longcat.chat/t',
+    },
+    body: JSON.stringify({
+      content,
+      agentId: '1',
+      messages: lcMsgs,
+      reasonEnabled: 1,
+      searchEnabled: 0,
+      regenerate: 0,
+    }),
+  });
+  if (!res.ok || !res.body) {
+    throw new Error(`LongCat HTTP ${res.status}`);
+  }
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const lines = buf.split('\n');
+    buf = lines.pop() ?? '';
+    for (const line of lines) {
+      const t = line.trim();
+      if (!t.startsWith('data:')) continue;
+      const raw = t.slice(5).trim();
+      try {
+        const ev = JSON.parse(raw);
+        const eventObj = ev.event;
+        if (eventObj) {
+          const etype = eventObj.type ?? '';
+          if ((etype === 'reason' || etype === 'think' || etype === 'thinking') && typeof eventObj.content === 'string') {
+            onReasoning(eventObj.content);
+          } else if (etype === 'content' && typeof eventObj.content === 'string') {
+            onDelta(eventObj.content);
+          } else if (etype === 'finish') {
+            return;
+          }
+        }
+      } catch {}
+    }
+  }
+}
+
+async function streamPtero(
+  req: ChatRequest,
+  onDelta: (t: string) => void,
+  onReasoning: (t: string) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  const normalized = normalizeMultiTurnMessages(req.messages, 10, 5000, 24000);
+  const history = normalized.slice(0, -1).map((m) => ({
+    role: m.role,
+    text: m.content.slice(0, 12000),
+    attachments: [],
+  }));
+  const lastUser = normalized[normalized.length - 1]?.content ?? '';
+  const messageText = req.system.trim()
+    ? `[System instructions: ${req.system.slice(0, 18000)}]\n\n${lastUser}`
+    : lastUser;
+
+  const res = await fetch('https://ptero.pro/wp-json/mlp/v1/chat-stream', {
+    method: 'POST',
+    signal,
+    headers: {
+      'User-Agent': CHROME_UA,
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream, application/json',
+      Origin: 'https://ptero.pro',
+      Referer: 'https://ptero.pro/',
+      'X-MLP-Guest-Token': randomHex(16),
+      'X-MLP-Guest-Username': 'nebian',
+    },
+    body: JSON.stringify({
+      message: messageText,
+      model: req.model || 'agnes-2.5-flash:agnes',
+      conversation_id: randomHex(16),
+      history,
+      attachments: [],
+      github_repo: '',
+      lang: 'en',
+      mode: 'quick',
+    }),
+  });
+  if (!res.ok || !res.body) {
+    throw new Error(`Ptero HTTP ${res.status}`);
+  }
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const lines = buf.split('\n');
+    buf = lines.pop() ?? '';
+    for (const line of lines) {
+      const t = line.trim();
+      if (!t.startsWith('data:')) continue;
+      const raw = t.slice(5).trim();
+      try {
+        const ev = JSON.parse(raw);
+        if (typeof ev.thinking_token === 'string' && ev.thinking_token) {
+          onReasoning(ev.thinking_token);
+        }
+        if (typeof ev.token === 'string' && ev.token) {
+          onDelta(ev.token);
+        }
+        if (ev.done === true) return;
+      } catch {}
+    }
+  }
+}
+
+async function streamUnikey(
+  req: ChatRequest,
+  onDelta: (t: string) => void,
+  onReasoning: (t: string) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  await streamCustom(
+    {
+      ...req,
+      custom: {
+        baseUrl: 'https://www.getunikey.ai/api/anonymous',
+        apiKey: '',
+        format: 'openai',
+      },
+    },
+    onDelta,
+    onReasoning,
+    signal,
+  );
+}
+
   const tryPrimary = async (): Promise<void> => {
     switch (req.provider) {
       case 'mercury3':
@@ -525,6 +799,18 @@ export async function streamZeusProvider(
         return;
       case 'k2horizon':
         await streamK2Horizon(req, wrappedDelta, onReasoning, signal);
+        return;
+      case 'motif':
+        await streamMotif(req, wrappedDelta, onReasoning, signal);
+        return;
+      case 'longcat':
+        await streamLongCat(req, wrappedDelta, onReasoning, signal);
+        return;
+      case 'ptero':
+        await streamPtero(req, wrappedDelta, onReasoning, signal);
+        return;
+      case 'unikey':
+        await streamUnikey(req, wrappedDelta, onReasoning, signal);
         return;
       case 'deepai':
         await streamDeepAi(req, wrappedDelta, signal);

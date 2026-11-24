@@ -18,7 +18,6 @@ const localDevelopment = Object.freeze({
   targets: Object.freeze([
     "packages/release",
     "packages/contracts",
-    "packages/standalone",
     "packages/components",
     "packages/platform",
     "packages/download",
@@ -35,8 +34,6 @@ const localDevelopment = Object.freeze({
     "apps/daemon",
     "tools/dev",
     "tools/pack",
-    "tools/release",
-    "tools/serve",
   ]),
 });
 const buildTargets = localDevelopment.targets;

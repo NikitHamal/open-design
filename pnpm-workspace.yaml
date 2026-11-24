@@ -2,8 +2,6 @@ packages:
   - packages/*
   - apps/*
   - tools/*
-  - shells/*
-  - e2e
 
 overrides:
   brace-expansion: 5.0.6

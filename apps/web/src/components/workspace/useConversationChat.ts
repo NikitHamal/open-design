@@ -198,14 +198,7 @@ export function useConversationChat(
       // This controller is installed synchronously before dispatch, so two
       // activations in one React turn cannot admit two replacement requests.
       if (abortRef.current) return;
-      if (cfg.mode !== 'daemon') {
-        setError('Side Chat needs a local agent. Pick one in the top bar.');
-        return;
-      }
-      if (!cfg.agentId) {
-        setError('Pick a local agent first (top bar).');
-        return;
-      }
+      const effectiveAgentId = cfg.agentId || 'zeus';
 
       const retryTarget = retryOfAssistantId
         ? resolveRetryTarget(messagesRef.current, retryOfAssistantId)
@@ -213,11 +206,11 @@ export function useConversationChat(
       if (retryOfAssistantId && !retryTarget) return;
 
       const startedAt = Date.now();
-      const selectedAgent = agents.get(cfg.agentId) ?? null;
-      const choice = effectiveAgentModelChoice(selectedAgent, cfg.agentModels?.[cfg.agentId]);
+      const selectedAgent = agents.get(effectiveAgentId) ?? null;
+      const choice = effectiveAgentModelChoice(selectedAgent, cfg.agentModels?.[effectiveAgentId]);
       const assistantAgentName = agentModelDisplayName(
-        cfg.agentId,
-        selectedAgent?.name,
+        effectiveAgentId,
+        selectedAgent?.name ?? 'Zeus Engine',
         choice?.model,
       );
 

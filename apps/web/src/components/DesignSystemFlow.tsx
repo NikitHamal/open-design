@@ -2400,10 +2400,8 @@ export function DesignSystemDetailView({
         setActiveConversationId(fresh.id);
         conversationId = fresh.id;
       }
-      if (config.mode !== 'daemon' || !config.agentId) {
-        setChatError(t('dsFlow.pickLocalAgentFirst'));
-        return;
-      }
+      const effectiveDsAgentId = config.agentId || 'zeus';
+      void effectiveDsAgentId;
 
       setChatError(null);
       setStatusLine(null);

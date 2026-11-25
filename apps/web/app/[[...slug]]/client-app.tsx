@@ -3,9 +3,12 @@
 import dynamic from 'next/dynamic';
 
 import { MatrixLoader } from '../../src/components/MatrixLoader';
+import { installNetGuard } from '../../src/runtime/net-guard';
 import { AppUpdatePrompt } from '../../src/components/AppUpdatePrompt';
 import { installChatScrollExperiments } from '../../src/runtime/chat-scroll-experiments';
 import { installChatScrollTakeover } from '../../src/runtime/chat-scroll-takeover';
+
+installNetGuard();
 
 // The consumer of the scroll-freeze probe's verdict that acts on it: when the
 // chat log's compositor-side scroll extent goes stale, kick the compositor for

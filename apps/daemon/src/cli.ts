@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // @ts-nocheck
+import './net-guard.js';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { runDaemonCliStartup, startDaemonRuntime } from './daemon-startup.js';

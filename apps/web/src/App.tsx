@@ -6136,7 +6136,78 @@ function AppInner() {
     );
   }
   return (
-    null
+    <>
+      <div
+        className={`workspace-shell workspace-shell--${clientType}`}
+        data-client-type={clientType}
+        data-host-platform={hostPlatform}
+      >
+        <WorkspaceTabsBar
+          key={workspaceTabsReset}
+          route={route}
+          projects={workspaceChromeProjects}
+          activeProjectWorkspaceId={
+            route.kind === 'project' && activeProject
+              ? activeProject.workspaceId ?? null
+              : undefined
+          }
+          preserveSignedOutShareRoute={false}
+          onboardingCompleted={true}
+          identityScopeKey={workspaceTabsIdentityScopeKey}
+          workspaceContext={workspaceContext}
+          onRenameProject={handleRenameProject}
+          onDuplicateProject={handleDuplicateProject}
+          onDeleteProject={handleDeleteProject}
+        />
+        <div className="workspace-shell__body">
+          {appMain}
+        </div>
+      </div>
+      <TooltipLayer />
+      <AnimatePresence>
+        {settingsOpen ? renderSettingsSurface('modal') : null}
+      </AnimatePresence>
+      <MemoryToast
+        onOpenMemory={() => openSettings('memory')}
+        subscriptionMode={memoryToastSubscriptionMode({
+          routeKind: route.kind,
+          projectRunActive:
+            route.kind === 'project'
+            && projectRunActivity.projectId === route.projectId
+            && projectRunActivity.active,
+          memorySurfaceOpen:
+            settingsInitialSection === 'memory'
+            && (
+              settingsOpen
+              || (route.kind === 'home' && route.view === 'settings')
+            ),
+        })}
+      />
+      {workingDirError ? (
+        <Toast
+          message={workingDirError}
+          role="alert"
+          onDismiss={() => setWorkingDirError(null)}
+        />
+      ) : null}
+      {projectCreateError ? (
+        <Toast
+          message={projectCreateError.split('\n')[0] ?? projectCreateError}
+          details={projectCreateError.includes('\n') ? projectCreateError.slice(projectCreateError.indexOf('\n') + 1) : null}
+          role="alert"
+          tone="error"
+          onDismiss={() => setProjectCreateError(null)}
+        />
+      ) : null}
+      {projectOpenError ? (
+        <Toast
+          message={projectOpenError}
+          role="alert"
+          tone="error"
+          onDismiss={() => setProjectOpenError(null)}
+        />
+      ) : null}
+    </>
   );
 }
 

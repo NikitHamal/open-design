@@ -69,7 +69,7 @@ jobs:
         run: node scripts/build-app.mjs
 
       - name: Generate icons
-        run: npx --yes @tauri-apps/cli@2 icon apps/web/public/app-icon.png
+        run: npx --yes @tauri-apps/cli@2 icon ../apps/web/public/app-icon.png
         working-directory: src-tauri
         env:
           TAURI_CONFIG: "{}"

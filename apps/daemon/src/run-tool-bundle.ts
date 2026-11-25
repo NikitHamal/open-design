@@ -120,6 +120,10 @@ export function validateRunToolBundleForAgent(
     };
   }
 
+  if (agent.id === 'zeus') {
+    return { ok: true };
+  }
+
   if (agent.externalMcpInjection === 'claude-mcp-json') {
     if (options.deliveryTarget && options.deliveryTarget !== 'managed-project') {
       return {

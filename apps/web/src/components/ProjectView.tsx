@@ -10989,17 +10989,10 @@ export function ProjectView({
         },
       };
 
-      if (config.mode === 'daemon') {
-        if (!config.agentId) {
-          handlers.onError(new Error('Pick a local agent first (top bar).'));
-          return true;
-        }
-        const choice = effectiveSelectedAgentChoice;
-        const daemonByokOpenCode = config.agentId === 'byok-opencode';
-        if (daemonByokOpenCode && !agentsById.get('byok-opencode')?.available) {
-          handlers.onError(new Error(BYOK_OPENCODE_UNAVAILABLE_MESSAGE));
-          return true;
-        }
+      if (config.mode === 'daemon' || config.mode === 'api') {
+        const effectiveDaemonAgentId = 'zeus';
+        const choice = config.agentModels?.zeus ?? effectiveSelectedAgentChoice;
+        const daemonByokOpenCode = config.mode === 'api' || config.agentId === 'byok-opencode';
         // v2 analytics: when the active project is a DS workspace
         // (created by `prepareCreatedDesignSystemProject`, identifiable
         // by `metadata.importedFrom === 'design-system'`), every run
@@ -11070,7 +11063,7 @@ export function ProjectView({
           recoveryActionInstanceId: taskAnalytics.recoveryActionInstanceId,
         };
         void streamViaDaemon({
-          agentId: config.agentId,
+          agentId: effectiveDaemonAgentId,
           history: nextHistory,
           signal: controller.signal,
           cancelSignal: cancelController.signal,

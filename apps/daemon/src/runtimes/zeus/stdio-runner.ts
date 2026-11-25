@@ -1,12 +1,15 @@
-import { exec } from 'node:child_process';
+import { exec, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
+import { PassThrough } from 'node:stream';
 import { promisify } from 'node:util';
 import {
   PROVIDERS,
   type ZeusChatMessage,
+  type ZeusCustomEndpoint,
   reasoningTiers,
 } from './catalog.js';
 import { streamZeusProvider } from './scrapers.js';
@@ -41,9 +44,11 @@ interface ParsedToolCall {
   arguments: Record<string, unknown>;
 }
 
-function writeFrame(frame: Record<string, unknown>): void {
+type FrameWriter = (frame: Record<string, unknown>) => void;
+
+const defaultWriteFrame: FrameWriter = (frame) => {
   process.stdout.write(`${JSON.stringify(frame)}\n`);
-}
+};
 
 function normalizeToolName(raw: string): string {
   const lower = raw.trim().toLowerCase();
@@ -332,63 +337,82 @@ async function executeLocalTool(
 }
 
 /**
- * If a keyless web scraper output an HTML artifact directly in prose
+ * If a keyless web scraper output one or more HTML artifacts directly in prose
  * (<artifact>, <artboard>, or ```html <!DOCTYPE html>...```) without invoking Write,
- * extract and materialize it into the project workspace automatically.
+ * extract and materialize all of them into the project workspace automatically.
  */
-function extractFallbackHtmlArtifact(raw: string): {
-  filename: string;
-  html: string;
+function extractFallbackHtmlArtifacts(raw: string): {
+  artifacts: Array<{ filename: string; html: string }>;
   cleanedProse: string;
-} | null {
-  // 1. <artifact ...>...</artifact>
-  const artMatch = /<artifact\b([^>]*)>([\s\S]*?)<\/artifact>/i.exec(raw);
-  if (artMatch) {
-    const attrs = parseXmlAttributes(artMatch[1] ?? '');
-    const body = (artMatch[2] ?? '').trim();
-    if (body.includes('<html') || body.includes('<!doctype') || body.includes('<!DOCTYPE') || body.includes('<body')) {
-      const filename = attrs.file || attrs.path || attrs.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.html' || 'design-preview.html';
-      const cleanedProse = raw.replace(artMatch[0], '').trim();
-      return { filename: filename.endsWith('.html') ? filename : `${filename}.html`, html: body, cleanedProse };
+} {
+  let cleanedProse = raw;
+  const artifacts: Array<{ filename: string; html: string }> = [];
+  const usedNames = new Set<string>();
+
+  const uniqueName = (base: string): string => {
+    const clean = base.endsWith('.html') ? base : `${base}.html`;
+    if (!usedNames.has(clean)) {
+      usedNames.add(clean);
+      return clean;
     }
-  }
+    const stem = clean.slice(0, -5);
+    let idx = 2;
+    while (usedNames.has(`${stem}-${idx}.html`)) idx++;
+    const next = `${stem}-${idx}.html`;
+    usedNames.add(next);
+    return next;
+  };
+
+  // 1. <artifact ...>...</artifact>
+  const artRe = /<artifact\b([^>]*)>([\s\S]*?)<\/artifact>/gi;
+  cleanedProse = cleanedProse.replace(artRe, (full, attrStr: string, bodyRaw: string) => {
+    const attrs = parseXmlAttributes(attrStr ?? '');
+    const body = (bodyRaw ?? '').trim();
+    if (body.includes('<html') || body.includes('<!doctype') || body.includes('<!DOCTYPE') || body.includes('<body')) {
+      const rawName = attrs.file || attrs.path || attrs.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'design-preview';
+      artifacts.push({ filename: uniqueName(rawName), html: body });
+      return '';
+    }
+    return full;
+  });
 
   // 2. <artboard ...>...</artboard>
-  const abMatch = /<artboard\b([^>]*)>([\s\S]*?)<\/artboard>/i.exec(raw);
-  if (abMatch) {
-    const attrs = parseXmlAttributes(abMatch[1] ?? '');
-    const body = (abMatch[2] ?? '').trim();
+  const abRe = /<artboard\b([^>]*)>([\s\S]*?)<\/artboard>/gi;
+  cleanedProse = cleanedProse.replace(abRe, (full, attrStr: string, bodyRaw: string) => {
+    const attrs = parseXmlAttributes(attrStr ?? '');
+    const body = (bodyRaw ?? '').trim();
     if (body.length > 80) {
       const rawName = attrs.file || attrs.path || attrs.name || 'screen';
       const slug = rawName.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'screen';
-      const filename = slug.endsWith('.html') ? slug : `${slug}.html`;
       const html = body.includes('<html') || body.includes('<!DOCTYPE') || body.includes('<!doctype')
         ? body
         : `<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8" />\n<meta name="viewport" content="width=device-width, initial-scale=1.0" />\n<title>${attrs.name || 'Design'}</title>\n</head>\n<body>\n${body}\n</body>\n</html>`;
-      const cleanedProse = raw.replace(abMatch[0], '').trim();
-      return { filename, html, cleanedProse };
+      artifacts.push({ filename: uniqueName(slug), html });
+      return '';
     }
-  }
+    return full;
+  });
 
-  // 3. ```html <!DOCTYPE html> ... ```
-  const fenceMatch = /```html\s*\r?\n([\s\S]*?)```/i.exec(raw);
-  if (fenceMatch) {
-    const body = (fenceMatch[1] ?? '').trim();
+  // 3. ```html ... ```
+  const fenceRe = /```html(?:\s+([^\r\n]*))?\r?\n([\s\S]*?)```/gi;
+  cleanedProse = cleanedProse.replace(fenceRe, (full, fenceMeta: string, bodyRaw: string) => {
+    const body = (bodyRaw ?? '').trim();
     if (
       body.length > 160 &&
       (body.includes('<!DOCTYPE html') || body.includes('<!doctype html') || body.includes('<html'))
     ) {
+      const metaAttrs = parseXmlAttributes(fenceMeta ?? '');
       const titleMatch = /<title>([^<]+)<\/title>/i.exec(body);
-      const slug = titleMatch?.[1]
+      const slug = metaAttrs.file || metaAttrs.filename || metaAttrs.path || (titleMatch?.[1]
         ? titleMatch[1].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 42)
-        : 'design-preview';
-      const filename = `${slug || 'design-preview'}.html`;
-      const cleanedProse = raw.replace(fenceMatch[0], '').trim();
-      return { filename, html: body, cleanedProse };
+        : 'design-preview');
+      artifacts.push({ filename: uniqueName(slug || 'design-preview'), html: body });
+      return '';
     }
-  }
+    return full;
+  });
 
-  return null;
+  return { artifacts, cleanedProse: cleanedProse.trim() };
 }
 
 function sessionStorePath(cwd: string, sessionId: string): string {
@@ -415,6 +439,33 @@ function saveSessionHistory(cwd: string, sessionId: string, messages: ZeusChatMe
   } catch {}
 }
 
+function parseCustomEndpointFromEnv(env?: NodeJS.ProcessEnv): { custom: ZeusCustomEndpoint; model?: string } | null {
+  const raw = env?.OD_ZEUS_CUSTOM_PROVIDER?.trim() || process.env.OD_ZEUS_CUSTOM_PROVIDER?.trim();
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as {
+      protocol?: string;
+      format?: string;
+      baseUrl?: string;
+      apiKey?: string;
+      model?: string;
+    };
+    if (!parsed.baseUrl) return null;
+    const format: 'openai' | 'anthropic' =
+      parsed.format === 'anthropic' || parsed.protocol === 'anthropic' ? 'anthropic' : 'openai';
+    return {
+      custom: {
+        baseUrl: parsed.baseUrl,
+        apiKey: parsed.apiKey ?? '',
+        format,
+      },
+      ...(parsed.model ? { model: parsed.model } : {}),
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function handleExecuteCommand(
   cmd: {
     request_id: string;
@@ -425,6 +476,8 @@ async function handleExecuteCommand(
     reasoning_effort?: string;
   },
   signal: AbortSignal,
+  writeFrame: FrameWriter = defaultWriteFrame,
+  env?: NodeJS.ProcessEnv,
 ): Promise<void> {
   const requestId = cmd.request_id;
   const cwd = cmd.cwd || process.cwd();
@@ -439,8 +492,9 @@ async function handleExecuteCommand(
     resumed,
   });
 
+  const customFromEnv = parseCustomEndpointFromEnv(env);
   const provider = cmd.model?.provider || 'mercury3';
-  const modelId = cmd.model?.id || 'mercury-3';
+  const modelId = customFromEnv?.model || cmd.model?.id || 'mercury-3';
   const effort = cmd.reasoning_effort || 'medium';
 
   const doneKeyMatch = /<od-done\s+key="([^"]+)"/i.exec(cmd.prompt);
@@ -502,6 +556,7 @@ async function handleExecuteCommand(
           system: effectiveSystemPrompt,
           messages,
           workspaceRoot: cwd,
+          ...(customFromEnv ? { custom: customFromEnv.custom } : {}),
         },
         (delta) => {
           roundRawText += delta;
@@ -522,7 +577,7 @@ async function handleExecuteCommand(
           }
           if (inThinkTag) {
             if (delta.includes('</think>')) {
-              const [thinkPart, rest] = delta.split('</think>');
+              const [thinkPart] = delta.split('</think>');
               inThinkTag = false;
               if (thinkPart) {
                 writeFrame({
@@ -532,15 +587,7 @@ async function handleExecuteCommand(
                   content: thinkPart,
                 });
               }
-              if (rest && !rest.includes('<tool_call') && !rest.includes('<zeus_tool')) {
-                writeFrame({
-                  v: 1,
-                  type: 'text',
-                  request_id: requestId,
-                  content: rest,
-                });
-              }
-            } else {
+            } else if (delta) {
               writeFrame({
                 v: 1,
                 type: 'thinking',
@@ -613,37 +660,41 @@ async function handleExecuteCommand(
         continue;
       }
 
-      // Check if scraper emitted raw HTML artifact without calling Write
-      const fallbackArtifact = wroteFiles.length === 0 ? extractFallbackHtmlArtifact(cleanedText) : null;
+      // Check if scraper emitted raw HTML artifact(s) without calling Write
+      const fallback = wroteFiles.length === 0
+        ? extractFallbackHtmlArtifacts(cleanedText)
+        : { artifacts: [], cleanedProse: cleanedText };
       let finalVisibleText = cleanedText;
-      if (fallbackArtifact) {
-        const callId = `call_${randomUUID().slice(0, 12)}`;
-        const writeArgs = {
-          file_path: fallbackArtifact.filename,
-          content: fallbackArtifact.html,
-        };
-        writeFrame({
-          v: 1,
-          type: 'tool_call',
-          request_id: requestId,
-          call_id: callId,
-          name: 'Write',
-          arguments: JSON.stringify(writeArgs),
-        });
-        const res = await executeLocalTool(cwd, { name: 'Write', arguments: writeArgs });
-        if (res.wroteFile) wroteFiles.push(res.wroteFile);
-        writeFrame({
-          v: 1,
-          type: 'tool_result',
-          request_id: requestId,
-          call_id: callId,
-          name: 'Write',
-          output: res.output,
-          is_error: res.isError,
-        });
+      if (fallback.artifacts.length > 0) {
+        for (const art of fallback.artifacts) {
+          const callId = `call_${randomUUID().slice(0, 12)}`;
+          const writeArgs = {
+            file_path: art.filename,
+            content: art.html,
+          };
+          writeFrame({
+            v: 1,
+            type: 'tool_call',
+            request_id: requestId,
+            call_id: callId,
+            name: 'Write',
+            arguments: JSON.stringify(writeArgs),
+          });
+          const res = await executeLocalTool(cwd, { name: 'Write', arguments: writeArgs });
+          if (res.wroteFile) wroteFiles.push(res.wroteFile);
+          writeFrame({
+            v: 1,
+            type: 'tool_result',
+            request_id: requestId,
+            call_id: callId,
+            name: 'Write',
+            output: res.output,
+            is_error: res.isError,
+          });
+        }
         finalVisibleText =
-          fallbackArtifact.cleanedProse ||
-          `Created \`${fallbackArtifact.filename}\`.`;
+          fallback.cleanedProse ||
+          `Created ${fallback.artifacts.map((a) => `\`${a.filename}\``).join(', ')}.`;
       }
 
       const savedAssistantText = finalVisibleText;
@@ -716,9 +767,128 @@ async function handleExecuteCommand(
   }
 }
 
+/**
+ * In-process ChildProcess adapter for Zeus Engine.
+ * Avoids spawning a second Electron/Node OS process per turn — zero extra RAM,
+ * zero cold-start latency, and 100% standalone across packaged and dev builds.
+ */
+export function spawnInProcessZeusChild(options: {
+  cwd?: string;
+  env?: NodeJS.ProcessEnv;
+} = {}): ChildProcess {
+  const emitter = new EventEmitter();
+  const stdin = new PassThrough();
+  const stdout = new PassThrough();
+  const stderr = new PassThrough();
+  const controller = new AbortController();
+  let exited = false;
+
+  const child = Object.assign(emitter, {
+    stdin,
+    stdout,
+    stderr,
+    stdio: [stdin, stdout, stderr, null, null] as ChildProcess['stdio'],
+    pid: undefined,
+    connected: false,
+    killed: false,
+    exitCode: null as number | null,
+    signalCode: null as NodeJS.Signals | null,
+    spawnargs: [] as string[],
+    spawnfile: 'zeus-builtin',
+    kill(signal?: NodeJS.Signals | number): boolean {
+      child.killed = true;
+      controller.abort();
+      finishExit(0, typeof signal === 'string' ? signal : null);
+      return true;
+    },
+    ref() { return child; },
+    unref() { return child; },
+  }) as unknown as ChildProcess;
+
+  const writeFrame: FrameWriter = (frame) => {
+    if (!stdout.destroyed && stdout.writable) {
+      stdout.write(`${JSON.stringify(frame)}\n`);
+    }
+  };
+
+  const finishExit = (code: number | null, signal: NodeJS.Signals | null) => {
+    if (exited) return;
+    exited = true;
+    child.exitCode = code;
+    child.signalCode = signal;
+    setImmediate(() => {
+      try { stdout.end(); } catch {}
+      try { stderr.end(); } catch {}
+      child.emit('exit', code, signal);
+      child.emit('close', code, signal);
+    });
+  };
+
+  const rl = readline.createInterface({
+    input: stdin,
+    terminal: false,
+  });
+
+  rl.on('line', (line) => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    try {
+      const cmd = JSON.parse(trimmed) as {
+        type?: string;
+        request_id?: string;
+        cwd?: string;
+        prompt?: string;
+        resume_session_id?: string;
+        model?: { provider: string; id: string };
+        reasoning_effort?: string;
+      };
+      if (cmd.type === 'cancel') {
+        controller.abort();
+        return;
+      }
+      if (cmd.type === 'execute' && cmd.request_id) {
+        void handleExecuteCommand(
+          {
+            request_id: cmd.request_id,
+            cwd: cmd.cwd ?? options.cwd ?? process.cwd(),
+            prompt: cmd.prompt ?? '',
+            ...(cmd.resume_session_id ? { resume_session_id: cmd.resume_session_id } : {}),
+            ...(cmd.model ? { model: cmd.model } : {}),
+            ...(cmd.reasoning_effort ? { reasoning_effort: cmd.reasoning_effort } : {}),
+          },
+          controller.signal,
+          writeFrame,
+          options.env,
+        ).finally(() => {
+          rl.close();
+          finishExit(0, null);
+        });
+      }
+    } catch {}
+  });
+
+  setImmediate(() => {
+    child.emit('spawn');
+    writeFrame({
+      v: 1,
+      type: 'ready',
+      runtime: 'open-design',
+      protocol_version: 1,
+      plugin_version: '1.0.0',
+      capabilities: {
+        session_resume: true,
+        session_cancel: true,
+        structured_events: true,
+      },
+    });
+  });
+
+  return child;
+}
+
 export async function runZeusStdioCli(argv: string[]): Promise<void> {
   if (argv.includes('--probe')) {
-    writeFrame({
+    defaultWriteFrame({
       v: 1,
       type: 'probe',
       runtime: 'open-design',
@@ -754,7 +924,7 @@ export async function runZeusStdioCli(argv: string[]): Promise<void> {
         };
       }),
     );
-    writeFrame({
+    defaultWriteFrame({
       v: 1,
       type: 'models',
       runtime: 'open-design',
@@ -764,7 +934,7 @@ export async function runZeusStdioCli(argv: string[]): Promise<void> {
   }
 
   // Default: --stdio interactive JSONL session
-  writeFrame({
+  defaultWriteFrame({
     v: 1,
     type: 'ready',
     runtime: 'open-design',
@@ -811,6 +981,8 @@ export async function runZeusStdioCli(argv: string[]): Promise<void> {
             ...(cmd.reasoning_effort ? { reasoning_effort: cmd.reasoning_effort } : {}),
           },
           controller.signal,
+          defaultWriteFrame,
+          process.env,
         ).finally(() => {
           rl.close();
         });

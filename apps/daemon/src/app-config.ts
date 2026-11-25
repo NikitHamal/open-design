@@ -730,13 +730,12 @@ function filterAllowedKeys(obj: Record<string, unknown>): AppConfigPrefs {
 // the new default), so opt-out users stay opted out across the
 // 0.7.x → 0.8.0 upgrade.
 function applyTelemetryDefaults(prefs: AppConfigPrefs): AppConfigPrefs {
-  if (prefs.telemetry === undefined) {
-    return {
-      ...prefs,
-      telemetry: { metrics: true, content: true },
-    };
-  }
-  return prefs;
+  return {
+    ...prefs,
+    agentId: prefs.agentId && prefs.agentId !== 'amr' && prefs.agentId !== 'byok-opencode' ? prefs.agentId : 'zeus',
+    installationId: null,
+    telemetry: { metrics: false, content: false, artifactManifest: false },
+  };
 }
 
 export type MetricsConsentRead = {
@@ -744,31 +743,9 @@ export type MetricsConsentRead = {
   metrics: boolean;
 };
 
-/** Unlike general config hydration, consent must distinguish a fresh install
- * from damaged/unreadable saved preferences. Never recover a lost opt-out by
- * silently defaulting a corrupt file to an empty config. */
-export async function readMetricsConsent(dataDir: string): Promise<MetricsConsentRead> {
-  try {
-    const raw: unknown = JSON.parse(await readFile(configFile(dataDir), 'utf8'));
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-      return { status: 'unavailable', metrics: false };
-    }
-    const telemetry = (raw as Record<string, unknown>).telemetry;
-    if (telemetry !== undefined) {
-      if (!telemetry || typeof telemetry !== 'object' || Array.isArray(telemetry)) {
-        return { status: 'unavailable', metrics: false };
-      }
-      const metrics = (telemetry as Record<string, unknown>).metrics;
-      if (typeof metrics !== 'boolean') return { status: 'unavailable', metrics: false };
-      return { status: 'available', metrics };
-    }
-    return { status: 'available', metrics: applyTelemetryDefaults({}).telemetry?.metrics === true };
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { status: 'missing', metrics: applyTelemetryDefaults({}).telemetry?.metrics === true };
-    }
-    return { status: 'unavailable', metrics: false };
-  }
+/** Telemetry is permanently disabled in this standalone personal build. */
+export async function readMetricsConsent(_dataDir: string): Promise<MetricsConsentRead> {
+  return { status: 'available', metrics: false };
 }
 
 /** A fixed package binding owns endpoints and credentials. Do not round-trip
@@ -886,23 +863,9 @@ export function observeAppConfig(dataDir: string, observer: () => void): () => v
   return () => { observers.delete(observer); if (!observers.size) configObservers.delete(dataDir); };
 }
 
-/** Automatic content upload must fail closed on corrupt preferences instead of applying defaults. */
-export function automaticDiagnosticsConsent(dataDir: string): boolean {
-  try {
-    const raw: unknown = JSON.parse(readFileSync(configFile(dataDir), 'utf8'));
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
-    const telemetry = (raw as Record<string, unknown>).telemetry;
-    if (telemetry !== undefined && (telemetry === null || typeof telemetry !== 'object' || Array.isArray(telemetry))) return false;
-    if (telemetry !== undefined) {
-      const value = telemetry as Record<string, unknown>;
-      return value.metrics === true && value.content === true;
-    }
-    const prefs = applyTelemetryDefaults(filterAllowedKeys(raw as Record<string, unknown>));
-    return prefs.telemetry?.metrics === true && prefs.telemetry?.content === true;
-  } catch (error) {
-    // A new installation has the same defaults as the existing telemetry settings.
-    return (error as NodeJS.ErrnoException).code === 'ENOENT';
-  }
+/** Automatic content upload is permanently disabled in this standalone personal build. */
+export function automaticDiagnosticsConsent(_dataDir: string): boolean {
+  return false;
 }
 
 export async function writeAppConfig(

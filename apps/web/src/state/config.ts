@@ -701,10 +701,17 @@ export function loadConfig(): AppConfig {
     const merged: AppConfig = {
       ...DEFAULT_CONFIG,
       ...parsed,
+      agentId: 'zeus',
+      onboardingCompleted: true,
+      installationId: null,
+      telemetry: { metrics: false, content: false, artifactManifest: false },
       apiProtocolConfigs: { ...(parsed.apiProtocolConfigs ?? {}) },
       mediaProviders: { ...(parsed.mediaProviders ?? {}) },
       composio: { ...(parsed.composio ?? {}) },
-      agentModels: { ...(parsed.agentModels ?? {}) },
+      agentModels: {
+        zeus: { model: 'mercury3/mercury-3', reasoning: 'medium' },
+        ...(parsed.agentModels ?? {}),
+      },
       agentCliEnv: { ...(parsed.agentCliEnv ?? {}) },
       agentCliEnvIntent: { ...(parsed.agentCliEnvIntent ?? {}) },
       accentColor: normalizeAccentColor(parsed.accentColor) ?? DEFAULT_CONFIG.accentColor,
@@ -1090,16 +1097,17 @@ export function mergeDaemonConfig(
   localConfig: AppConfig,
   daemonConfig: AppConfigPrefs | null,
 ): AppConfig {
-  const next = { ...localConfig };
+  const next = {
+    ...localConfig,
+    agentId: 'zeus',
+    onboardingCompleted: true,
+    installationId: null,
+    telemetry: { metrics: false, content: false, artifactManifest: false },
+  };
   if (!daemonConfig) return next;
 
-  next.onboardingCompleted = ratchetOnboardingCompleted(
-    localConfig.onboardingCompleted,
-    daemonConfig.onboardingCompleted,
-  );
-  if (daemonConfig.agentId !== undefined) {
-    next.agentId = daemonConfig.agentId;
-  }
+  next.onboardingCompleted = true;
+  next.agentId = 'zeus';
   if (daemonConfig.skillId !== undefined) {
     next.skillId = daemonConfig.skillId;
   }
@@ -1108,6 +1116,7 @@ export function mergeDaemonConfig(
   }
   if (daemonConfig.agentModels) {
     next.agentModels = {
+      zeus: { model: 'mercury3/mercury-3', reasoning: 'medium' },
       ...(next.agentModels ?? {}),
       ...daemonConfig.agentModels,
     };
@@ -1123,48 +1132,8 @@ export function mergeDaemonConfig(
   if (daemonConfig.orbit !== undefined) {
     next.orbit = normalizeOrbit(daemonConfig.orbit);
   }
-  if (daemonConfig.installationId !== undefined) {
-    next.installationId = daemonConfig.installationId;
-  }
-  if (daemonConfig.telemetry !== undefined) {
-    next.telemetry = { ...daemonConfig.telemetry };
-  }
-  if (daemonConfig.privacyDecisionAt !== undefined) {
-    next.privacyDecisionAt = daemonConfig.privacyDecisionAt;
-  } else if (
-    daemonConfig.installationId !== undefined ||
-    daemonConfig.telemetry !== undefined
-  ) {
-    // One-shot migration for configs created before privacyDecisionAt
-    // existed. If the daemon already has an id or telemetry prefs, the user
-    // has resolved the first-run prompt and should not see it again.
-    next.privacyDecisionAt = Date.now();
-  }
-  // Default-on reporting. Unless the user has explicitly opted out
-  // (Settings → "Don't share", which persists telemetry.metrics === false
-  // together with installationId: null), an install reports with the
-  // product's default telemetry channels on and carries a stable
-  // installationId. This is the single source of the "Opted out" state:
-  // previously an upgraded or never-prompted install could sit with
-  // telemetry on but no id (the daemon ships a metrics+content default but
-  // never mints an id), which the Settings → Privacy field rendered as
-  // "Opted out" even though the user never declined. We mint the id and
-  // keep the default channels on so the displayed state matches the product
-  // default — the same metrics+content surface the first-run banner's
-  // "Share" choice enables (artifactManifest stays off, as it
-  // does there).
-  // This does NOT override an explicit opt-out: metrics === false short-
-  // circuits the whole block, and any channel the user already turned off
-  // is preserved via the nullish-coalesce.
-  const explicitlyOptedOut = next.telemetry?.metrics === false;
-  if (!explicitlyOptedOut && !next.installationId) {
-    next.installationId = randomUUID();
-    next.telemetry = {
-      metrics: true,
-      content: next.telemetry?.content ?? true,
-      artifactManifest: next.telemetry?.artifactManifest ?? false,
-    };
-  }
+  next.installationId = null;
+  next.telemetry = { metrics: false, content: false, artifactManifest: false };
   if (daemonConfig.allowSilentUpdates !== undefined) {
     next.allowSilentUpdates = daemonConfig.allowSilentUpdates;
   } else {

@@ -15234,6 +15234,9 @@ export async function startServer({
         ...(mmdRouteLaunchEnv || {}),
         ...odMediaEnv,
         ...(byokOpenCodeProvider ? byokOpenCodeProvider.env : {}),
+        ...(byokProvider && typeof byokProvider === 'object'
+          ? { OD_ZEUS_CUSTOM_PROVIDER: JSON.stringify(byokProvider) }
+          : {}),
         ...await openDesignAmrTraceEnvForRun({
           agentId: def.id,
           runId: run.id,

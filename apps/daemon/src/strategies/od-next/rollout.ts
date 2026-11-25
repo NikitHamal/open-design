@@ -68,7 +68,7 @@ function resolveRequestedMode(
 ): { mode: OdNextRolloutMode; source: OdNextRolloutModeSource } {
   const fromEnv = envMode(env.OD_NEXT_STRATEGY_ROLLOUT);
   if (fromEnv) return { mode: fromEnv, source: 'env' };
-  return { mode: 'active', source: 'default' };
+  return { mode: 'off', source: 'default' };
 }
 
 export function readOdNextRolloutPolicy(

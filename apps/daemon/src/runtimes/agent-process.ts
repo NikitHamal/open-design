@@ -30,6 +30,7 @@ import { ChildProcess, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnInProcessZeusChild } from './zeus/stdio-runner.js';
 import {
   captureProcessSnapshot,
   isProcessAlive,
@@ -274,6 +275,13 @@ export type SpawnedAgentProcess = {
  * tree.
  */
 export function spawnAgentProcess(request: SpawnAgentProcessRequest): SpawnedAgentProcess {
+  if (request.args.includes('--zeus-stdio')) {
+    const child = spawnInProcessZeusChild({
+      cwd: request.cwd,
+      env: request.env,
+    });
+    return { child, processGroupId: null, promptDeliveredAtSpawn: false };
+  }
   const detached = process.platform !== 'win32';
   const staged = typeof request.stdin === 'object'
     ? openCompletePromptAsStdin(request.runDir, request.stdin.prompt)

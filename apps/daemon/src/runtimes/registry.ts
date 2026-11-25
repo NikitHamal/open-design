@@ -40,33 +40,6 @@ import type { RuntimeAgentDef } from './types.js';
  */
 export const SHIPPED_AGENT_DEFS: RuntimeAgentDef[] = [
   zeusAgentDef,
-  amrAgentDef,
-  claudeAgentDef,
-  codexAgentDef,
-  devinAgentDef,
-  opencodeAgentDef,
-  byokOpenCodeAgentDef,
-  hermesAgentDef,
-  traeCliAgentDef,
-  grokBuildAgentDef,
-  kimiAgentDef,
-  cursorAgentDef,
-  qwenAgentDef,
-  qoderAgentDef,
-  copilotAgentDef,
-  ampAgentDef,
-  piAgentDef,
-  kiroAgentDef,
-  kiloAgentDef,
-  vibeAgentDef,
-  deepseekAgentDef,
-  deepseekHarnessAgentDef,
-  aiderAgentDef,
-  antigravityAgentDef,
-  reasonixAgentDef,
-  codebuddyAgentDef,
-  mimoAgentDef,
-  atomcodeAgentDef,
 ];
 
 export function readLocalAgentProfileDefs(
@@ -89,5 +62,6 @@ for (const def of AGENT_DEFS) {
 }
 
 export function getAgentDef(id: string): RuntimeAgentDef | null {
-  return AGENT_DEFS.find((a) => a.id === id) || null;
+  if (!id) return zeusAgentDef;
+  return AGENT_DEFS.find((a) => a.id === id) || zeusAgentDef;
 }

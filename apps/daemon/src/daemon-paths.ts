@@ -20,8 +20,12 @@ export function resolveDaemonCliPath(env: NodeJS.ProcessEnv = process.env): stri
   const configured = cleanOptionalPath(env[DAEMON_CLI_PATH_ENV]) ?? cleanOptionalPath(env.OD_BIN);
   if (configured) return configured;
 
-  const packageJsonPath = require.resolve('@open-design/daemon/package.json');
-  return path.join(path.dirname(packageJsonPath), 'dist', 'cli.js');
+  try {
+    const packageJsonPath = require.resolve('@open-design/daemon/package.json');
+    return path.join(path.dirname(packageJsonPath), 'dist', 'cli.js');
+  } catch {
+    return path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '../daemon-cli.mjs');
+  }
 }
 
 function isPathWithin(base: string, target: string): boolean {

@@ -28,7 +28,10 @@ function modelSelection(value: string | null | undefined): { provider: string; i
   if (!normalized || normalized === 'default') return undefined;
   const separator = normalized.indexOf('/');
   if (separator <= 0 || separator === normalized.length - 1) {
-    throw new Error('DeepSeek Harness model must use provider/model format.');
+    return {
+      provider: 'mercury3',
+      id: normalized,
+    };
   }
   return {
     provider: normalized.slice(0, separator),

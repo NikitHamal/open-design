@@ -568,6 +568,22 @@ async function probe(
   def: RuntimeAgentDef,
   configuredEnv: Record<string, string> = {},
 ): Promise<DetectedAgent> {
+  if (def.id === 'zeus') {
+    rememberRuntimeVersions(def.id, 'zeus-builtin', {
+      invocable: true,
+      agentCliVersion: '1.0.0',
+    });
+    return {
+      ...stripFns(def),
+      models: def.fallbackModels ?? [DEFAULT_MODEL_OPTION],
+      modelsSource: 'live',
+      available: true,
+      path: process.execPath,
+      version: '1.0.0',
+      authStatus: 'authenticated',
+      ...installMetaForAgent(def.id, configuredEnv),
+    };
+  }
   detectedRuntimeVersions.delete(def.id);
   missingRuntimeVersionRetryAt.delete(def.id);
   // Forget what a previous pass proved unusable before re-probing: a rescan

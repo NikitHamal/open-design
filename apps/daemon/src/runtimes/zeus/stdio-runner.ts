@@ -783,6 +783,12 @@ export function spawnInProcessZeusChild(options: {
   const controller = new AbortController();
   let exited = false;
 
+  const state = {
+    killed: false,
+    exitCode: null as number | null,
+    signalCode: null as NodeJS.Signals | null,
+  };
+
   const child = Object.assign(emitter, {
     stdin,
     stdout,
@@ -790,13 +796,13 @@ export function spawnInProcessZeusChild(options: {
     stdio: [stdin, stdout, stderr, null, null] as ChildProcess['stdio'],
     pid: undefined,
     connected: false,
-    killed: false,
-    exitCode: null as number | null,
-    signalCode: null as NodeJS.Signals | null,
+    get killed() { return state.killed; },
+    get exitCode() { return state.exitCode; },
+    get signalCode() { return state.signalCode; },
     spawnargs: [] as string[],
     spawnfile: 'zeus-builtin',
     kill(signal?: NodeJS.Signals | number): boolean {
-      child.killed = true;
+      state.killed = true;
       controller.abort();
       finishExit(0, typeof signal === 'string' ? signal : null);
       return true;
@@ -814,8 +820,8 @@ export function spawnInProcessZeusChild(options: {
   const finishExit = (code: number | null, signal: NodeJS.Signals | null) => {
     if (exited) return;
     exited = true;
-    child.exitCode = code;
-    child.signalCode = signal;
+    state.exitCode = code;
+    state.signalCode = signal;
     setImmediate(() => {
       try { stdout.end(); } catch {}
       try { stderr.end(); } catch {}

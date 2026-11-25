@@ -580,7 +580,7 @@ async function probe(
       available: true,
       path: process.execPath,
       version: '1.0.0',
-      authStatus: 'authenticated',
+      authStatus: 'ok',
       ...installMetaForAgent(def.id, configuredEnv),
     };
   }

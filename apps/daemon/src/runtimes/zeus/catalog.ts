@@ -794,7 +794,7 @@ for (const p of PROVIDERS) {
 }
 
 export const DEMO_PROVIDER: ProviderMeta = {
-  id: "demo", name: "Zeus Demo Engine", tagline: "", speed: "instant", color: "#868e96", icon: "draw",
+  id: "demo", name: "OpenDesign Templates", tagline: "", speed: "instant", color: "#868e96", icon: "draw",
   models: [{ id: "zeus-templates", label: "Template designer", note: "Used when the native engine is unavailable", vision: false }],
 };
 

@@ -49,6 +49,8 @@ const AGENT_ALIASES: Record<string, string> = {
   'aider cli': 'aider',
   'aider chat': 'aider',
   agy: 'antigravity',
+  'zeus engine': 'zeus',
+  'zeus-engine': 'zeus',
 };
 
 export function agentDisplayName(

@@ -2298,6 +2298,10 @@ function buildToolRow(
   event: Extract<PersistedAgentEvent, { kind: 'tool_use' }>,
   result: Extract<PersistedAgentEvent, { kind: 'tool_result' }> | undefined,
 ): ToolRow | null {
+  if (/^(zeus_tool|tool_call|od_tool)$/i.test(event.name)) {
+    const fileFromInput = fileOf(event.input);
+    if (!fileFromInput) return null;
+  }
   const kind = toolKind(event.name, event.input);
   const command = isCommandTool(event.name) ? commandOf(event.input) : '';
   const file = fileOf(event.input) ?? (command ? commandFile(command) : null);

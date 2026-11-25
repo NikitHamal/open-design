@@ -41,6 +41,9 @@ const ICON_EXT: Record<string, 'svg' | 'png'> = {
 // instead of duplicating identical SVG files under transport-specific ids.
 const ICON_ASSET_ID: Record<string, string> = {
   'deepseek-harness': 'deepseek',
+  zeus: 'amr',
+  'zeus-engine': 'amr',
+  'open-design': 'amr',
 };
 
 // SVG marks that are single-color silhouettes (no baked brand colors).

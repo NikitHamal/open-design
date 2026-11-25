@@ -450,7 +450,7 @@ export function ToolRow({
     <div className={rowClass}>
       {icon}
       <span className={styles.name}>
-        {row.tool === 'other' ? `${row.name} ` : null}
+        {row.tool === 'other' && row.title !== row.name ? `${row.name} ` : null}
         {row.rawTitle ? <code>{row.title}</code> : row.title}
       </span>
       {failButton}

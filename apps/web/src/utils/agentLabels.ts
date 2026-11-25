@@ -9,6 +9,9 @@ const AGENT_LABELS: Record<string, string> = {
   kiro: 'Kiro',
   opencode: 'OpenCode',
   amr: 'OpenDesign',
+  zeus: 'OpenDesign',
+  'zeus-engine': 'OpenDesign',
+  'open-design': 'OpenDesign',
   'cursor-agent': 'Cursor',
   cursor: 'Cursor',
   qwen: 'Qwen',
@@ -75,14 +78,16 @@ export function agentIconId(
     const base = raw.split(' · ')[0]?.trim() || raw;
     const key = normalizeKey(base);
     const alias = AGENT_ALIASES[key] ?? key;
+    if (alias === 'zeus' || alias === 'zeus-engine' || alias === 'open-design') return 'amr';
     if (AGENT_LABELS[alias]) return alias;
     if (alias.includes('cursor-agent')) return 'cursor-agent';
     for (const id of Object.keys(AGENT_LABELS)) {
-      if (alias.includes(id)) return id;
+      if (alias.includes(id)) return id === 'zeus' || id === 'zeus-engine' || id === 'open-design' ? 'amr' : id;
     }
   }
   const fallback = normalizeKey(agentId ?? fallbackName ?? '');
-  return fallback || 'claude';
+  if (fallback === 'zeus' || fallback === 'zeus-engine' || fallback === 'open-design') return 'amr';
+  return fallback || 'amr';
 }
 
 export function exactAgentDisplayName(raw: string | null | undefined): string | null {

@@ -16,7 +16,11 @@ import { streamZeusProvider } from './scrapers.js';
 import {
   StreamSplitter,
   SUPPORTED_TOOLS,
+  canonicalizeToolArgs,
   extractToolCallsFromOutput,
+  inferToolFromArgs,
+  isKnownTool,
+  normalizeToolName,
   type ParsedToolCall,
 } from './tool-parser.js';
 
@@ -35,15 +39,15 @@ const ZEUS_BRIDGE_SYSTEM_PROMPT = [
   "- Typography: 'Google Sans Flex' for UI, display and body; 'Roboto Mono' for code.",
   '- Keep text contrast at WCAG AA or better in both light and dark surfaces.',
   '',
-  'TOOLS. You have no native function calling. To act, emit a <tool_call> block in your reply. The host executes it and returns a <tool_result> message, then you continue.',
+  'TOOLS. To act on the workspace, emit a tool block in your reply. The host executes it and returns a <tool_result> message, then you continue.',
   '',
-  'Create or overwrite a file (preferred for HTML, CSS, JS: write the raw file body directly inside the tag, no JSON escaping needed):',
-  '<tool_call name="Write" path="landing.html">',
+  'Create or overwrite a file (write the raw file body directly inside <Write>, no JSON escaping needed):',
+  '<Write path="landing.html">',
   '<!DOCTYPE html>',
   '...complete self-contained file...',
-  '</tool_call>',
+  '</Write>',
   '',
-  'All other tools use one JSON object per <tool_call> block, valid JSON, on a single line:',
+  'Other workspace tools use one JSON object per <tool_call> block on a single line:',
   '<tool_call>{"name":"Read","arguments":{"file_path":"landing.html"}}</tool_call>',
   '<tool_call>{"name":"Edit","arguments":{"file_path":"landing.html","old_string":"exact old text","new_string":"new text"}}</tool_call>',
   '<tool_call>{"name":"Bash","arguments":{"command":"ls -la"}}</tool_call>',
@@ -53,8 +57,8 @@ const ZEUS_BRIDGE_SYSTEM_PROMPT = [
   '<tool_call>{"name":"TodoWrite","arguments":{"todos":[{"id":"1","content":"Build layout","status":"in_progress"}]}}</tool_call>',
   '',
   'Rules:',
-  '- The tool name is always one of: Write, Read, Edit, Bash, Glob, Grep, WebFetch, TodoWrite.',
-  '- Every design, prototype, slide deck or video must be saved with Write as a complete self-contained file in the project directory, using a relative path such as landing.html.',
+  '- Valid tool names are ONLY: Write, Read, Edit, Bash, Glob, Grep, WebFetch, TodoWrite.',
+  '- Every design, prototype, slide deck or video must be saved with Write as a complete self-contained file in the project directory, using a semantic relative path such as landing.html.',
   '- Never say a file was created or changed unless its <tool_result> reported success. If a result is an error, fix the call and retry.',
   '- After the last tool result, reply with a short plain-language summary and no tool block.',
 ].join('\n');
@@ -87,8 +91,21 @@ function safeResolveInCwd(cwd: string, targetPath: string): string {
 
 async function executeLocalTool(
   cwd: string,
-  call: ParsedToolCall,
+  rawCall: ParsedToolCall,
 ): Promise<{ output: string; isError: boolean; wroteFile?: string }> {
+  let normName = normalizeToolName(rawCall.name);
+  let normArgs = rawCall.arguments;
+  if (!isKnownTool(normName)) {
+    const inferred = inferToolFromArgs(normArgs);
+    if (inferred) {
+      normName = inferred.name;
+      normArgs = inferred.arguments;
+    }
+  }
+  const call: ParsedToolCall = {
+    name: normName,
+    arguments: canonicalizeToolArgs(normName, normArgs),
+  };
   try {
     switch (call.name) {
       case 'TodoWrite': {
@@ -396,15 +413,33 @@ async function handleExecuteCommand(
   const wantsTitleMarker = cmd.prompt.includes('<od-title>');
 
   let userPromptText = cmd.prompt;
+  let rawInstructions = '';
   let extraSystemContext = '';
+  const xmlPromptMatch = /<user_first_prompt>([\s\S]*?)<\/user_first_prompt>/i.exec(cmd.prompt);
+  const resumedRequestMarker = '\nCurrent user request:\n';
   const userRequestMarker = '\n# User request\n\n';
   const markerIdx = cmd.prompt.lastIndexOf(userRequestMarker);
-  if (markerIdx !== -1) {
-    const rawInstructions = cmd.prompt.slice(0, markerIdx);
+  const resumedIdx = cmd.prompt.lastIndexOf(resumedRequestMarker);
+
+  if (xmlPromptMatch) {
+    rawInstructions = cmd.prompt.slice(0, xmlPromptMatch.index);
+    userPromptText = xmlPromptMatch[1]!.trim();
+  } else if (markerIdx !== -1) {
+    rawInstructions = cmd.prompt.slice(0, markerIdx);
     userPromptText = cmd.prompt.slice(markerIdx + userRequestMarker.length).trim();
+  } else if (resumedIdx !== -1) {
+    rawInstructions = cmd.prompt.slice(0, resumedIdx);
+    userPromptText = cmd.prompt.slice(resumedIdx + resumedRequestMarker.length).trim();
+  }
+
+  if (rawInstructions) {
     const dsMatch = /(?:## Design System|# Design System|## Visual Direction)[\s\S]{0,4000}/i.exec(rawInstructions);
     if (dsMatch) {
-      extraSystemContext = `\n\n${dsMatch[0].trim()}`;
+      extraSystemContext += `\n\n${dsMatch[0].trim()}`;
+    }
+    const localeMatch = /# UI locale override[\s\S]{0,1200}/i.exec(rawInstructions);
+    if (localeMatch) {
+      extraSystemContext += `\n\n${localeMatch[0].trim()}`;
     }
   }
   if (wantsTitleMarker && !resumed) {
@@ -574,7 +609,7 @@ async function handleExecuteCommand(
         messages.push({
           role: 'user',
           content:
-            'Host notice: no file was written. Nothing exists on disk yet. Emit the complete file now with <tool_call name="Write" path="FILE.html">...</tool_call>, then summarise.',
+            'Host notice: no file was written. Nothing exists on disk yet. Emit the complete file now with <Write path="FILE.html">...</Write>, then summarise.',
         });
         continue;
       }

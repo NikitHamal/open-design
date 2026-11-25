@@ -210,7 +210,7 @@ export function useConversationChat(
       const choice = effectiveAgentModelChoice(selectedAgent, cfg.agentModels?.[effectiveAgentId]);
       const assistantAgentName = agentModelDisplayName(
         effectiveAgentId,
-        selectedAgent?.name ?? 'Zeus Engine',
+        selectedAgent?.name ?? 'OpenDesign',
         choice?.model,
       );
 

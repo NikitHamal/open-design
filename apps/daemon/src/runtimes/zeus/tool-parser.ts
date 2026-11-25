@@ -76,8 +76,36 @@ export function normalizeToolName(raw: string): string {
   return ALIASES[squash(raw)] ?? raw.trim();
 }
 
+/** Canonicalise argument keys so the web UI's fileOf / diffStat / commandOf always match. */
+export function canonicalizeToolArgs(name: string, args: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...args };
+  if (name === 'Write' || name === 'Read' || name === 'Edit') {
+    const fp = out.file_path ?? out.filePath ?? out.path ?? out.file ?? out.filename ?? out.target;
+    if (typeof fp === 'string' && fp.trim()) {
+      out.file_path = fp.trim();
+    } else if (name === 'Write') {
+      out.file_path = 'index.html';
+    }
+  }
+  if (name === 'Write' && typeof out.content !== 'string') {
+    const body = out.body ?? out.html ?? out.code ?? out.text ?? out.raw;
+    if (typeof body === 'string') out.content = body;
+  }
+  if (name === 'Edit') {
+    if (typeof out.old_string !== 'string' && typeof out.search === 'string') out.old_string = out.search;
+    if (typeof out.new_string !== 'string' && typeof out.replace === 'string') out.new_string = out.replace;
+  }
+  if (name === 'Bash' && typeof out.command !== 'string' && typeof out.cmd === 'string') {
+    out.command = out.cmd;
+  }
+  if ((name === 'Glob' || name === 'Grep') && typeof out.pattern !== 'string' && typeof out.query === 'string') {
+    out.pattern = out.query;
+  }
+  return out;
+}
+
 /** Infer the intended tool from arguments when a model uses a wrapper tag name as the tool name. */
-function inferToolFromArgs(args: Record<string, unknown>): ParsedToolCall | null {
+export function inferToolFromArgs(args: Record<string, unknown>): ParsedToolCall | null {
   if (Array.isArray(args.todos) || Array.isArray(args.plan) || Array.isArray(args.items)) {
     return { name: 'TodoWrite', arguments: { todos: args.todos ?? args.plan ?? args.items } };
   }
@@ -262,24 +290,44 @@ function parseAttributes(attrText: string): Record<string, string> {
   return attrs;
 }
 
+function extractXmlParams(block: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const paramRe = /<(?:antml:)?parameter\s+name=["']([^"']+)["']\s*>([\s\S]*?)<\/(?:antml:)?parameter>/gi;
+  let pm: RegExpExecArray | null;
+  while ((pm = paramRe.exec(block)) !== null) out[pm[1]!] = pm[2]!;
+  for (const tag of ['name', 'tool', 'path', 'file_path', 'file', 'content', 'old_string', 'new_string', 'command', 'pattern', 'query', 'url']) {
+    const re = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'i');
+    const m = re.exec(block);
+    if (m && !(tag in out)) out[tag] = m[1]!;
+  }
+  return out;
+}
+
 function callFromTagBody(attrs: Record<string, string>, bodyRaw: string, defaultName = ''): ParsedToolCall[] {
-  const candidateName = attrs.name ?? attrs.tool ?? defaultName;
+  const xmlParams = extractXmlParams(bodyRaw);
+  const mergedAttrs: Record<string, string> = { ...xmlParams, ...attrs };
+  const candidateName = mergedAttrs.name ?? mergedAttrs.tool ?? defaultName;
   const rawName = WRAPPER_NAMES.has(squash(candidateName)) ? defaultName : candidateName;
-  const body = bodyRaw.replace(/^\r?\n/, '').replace(/\r?\n$/, '');
-  const filePath = attrs.path ?? attrs.file_path ?? attrs.file ?? attrs.filename;
+  const body = (mergedAttrs.content ?? bodyRaw).replace(/^\r?\n/, '').replace(/\r?\n$/, '');
+  const filePath = mergedAttrs.path ?? mergedAttrs.file_path ?? mergedAttrs.file ?? mergedAttrs.filename;
   if (!rawName) {
     const parsed = parseLooseJson(body);
     if (parsed !== undefined) {
       const calls = callsFromValue(parsed);
       if (calls.length > 0) return calls;
     }
-    const inferred = inferToolFromArgs({ ...attrs, ...(body.trim() ? { content: body } : {}) });
+    const salvaged = salvageWrite(body);
+    if (salvaged) return [salvaged];
+    if (/<(?:!doctype\s+html|html|head|body|svg)\b/i.test(body)) {
+      return [{ name: 'Write', arguments: { file_path: filePath ?? 'index.html', content: body } }];
+    }
+    const inferred = inferToolFromArgs({ ...mergedAttrs, ...(body.trim() ? { content: body } : {}) });
     return inferred ? [inferred] : [];
   }
   const name = normalizeToolName(rawName);
   switch (name) {
     case 'Write':
-      return [{ name, arguments: { file_path: filePath ?? 'index.html', content: body || attrs.content || '' } }];
+      return [{ name, arguments: { file_path: filePath ?? 'index.html', content: body || mergedAttrs.content || '' } }];
     case 'Read':
       return [{ name, arguments: { file_path: filePath ?? body.trim() } }];
     case 'Edit': {
@@ -287,38 +335,64 @@ function callFromTagBody(attrs: Record<string, string>, bodyRaw: string, default
       if (parsed && typeof parsed === 'object') {
         return [{ name, arguments: { file_path: filePath ?? '', ...(parsed as Record<string, unknown>) } }];
       }
-      return [{ name, arguments: { file_path: filePath ?? '', old_string: attrs.search ?? attrs.old_string ?? '', new_string: attrs.replace ?? attrs.new_string ?? body } }];
+      return [{ name, arguments: { file_path: filePath ?? '', old_string: mergedAttrs.search ?? mergedAttrs.old_string ?? '', new_string: mergedAttrs.replace ?? mergedAttrs.new_string ?? body } }];
     }
     case 'Bash':
-      return [{ name, arguments: { command: attrs.command ?? attrs.cmd ?? body.trim() } }];
+      return [{ name, arguments: { command: mergedAttrs.command ?? mergedAttrs.cmd ?? body.trim() } }];
     case 'Glob':
-      return [{ name, arguments: { pattern: attrs.pattern ?? attrs.path ?? (body.trim() || '*') } }];
+      return [{ name, arguments: { pattern: mergedAttrs.pattern ?? mergedAttrs.path ?? (body.trim() || '*') } }];
     case 'Grep':
-      return [{ name, arguments: { pattern: attrs.pattern ?? attrs.query ?? body.trim(), path: attrs.path ?? '.' } }];
+      return [{ name, arguments: { pattern: mergedAttrs.pattern ?? mergedAttrs.query ?? body.trim(), path: mergedAttrs.path ?? '.' } }];
     case 'WebFetch':
-      return [{ name, arguments: { url: attrs.url ?? body.trim() } }];
+      return [{ name, arguments: { url: mergedAttrs.url ?? body.trim() } }];
     default: {
       const parsed = parseLooseJson(body);
-      const extra = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : { content: body };
-      return [{ name, arguments: { ...attrs, ...extra } }];
+      const extra = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : (body.trim() ? { content: body } : {});
+      const combined = { ...mergedAttrs, ...extra };
+      const inferred = inferToolFromArgs(combined);
+      if (inferred) return [inferred];
+      if (WRAPPER_NAMES.has(squash(name))) return [];
+      return [{ name, arguments: combined }];
     }
   }
 }
 
 /** Last resort for a Write call whose JSON is broken by unescaped quotes. */
 function salvageWrite(body: string): ParsedToolCall | undefined {
-  if (!/"(?:name|tool)"\s*:\s*"(?:Write|write_file|create_file)"/i.test(body)) return undefined;
-  const p = /"(?:file_path|path|file)"\s*:\s*"([^"]+)"/.exec(body);
-  const c = /"content"\s*:\s*"/.exec(body);
+  if (/"(?:old_string|search)"\s*:/.test(body)) return undefined;
+  const p = /"(?:file_path|path|file|filename)"\s*:\s*"([^"]+)"/.exec(body);
+  const c = /"(?:content|body|html|code)"\s*:\s*"/.exec(body);
   if (!p || !c) return undefined;
   let content = body.slice(c.index + c[0].length).replace(/"\s*\}\s*\}?\s*$/, '');
   content = content.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
   return content.trim() ? { name: 'Write', arguments: { file_path: p[1]!, content } } : undefined;
 }
 
+const SHORTHAND_TOOL_TAGS =
+  'Write|write_file|create_file|Edit|edit_file|Read|read_file|Bash|shell|run_command|Glob|list_dir|Grep|search_code|WebFetch|web_fetch|TodoWrite|todo_write';
+
 export function extractToolCallsFromOutput(raw: string): { cleanedText: string; toolCalls: ParsedToolCall[] } {
   let text = raw;
-  const toolCalls: ParsedToolCall[] = [];
+  const rawCalls: ParsedToolCall[] = [];
+
+  // Direct shorthand XML tags (<Write path="...">...</Write>, <Read path="..."/>, etc.)
+  const shorthandRe = new RegExp(
+    `<(${SHORTHAND_TOOL_TAGS})\\b([^>]*?)(?:\\/>|>([\\s\\S]*?)(?:<\\/\\1\\s*>|$))`,
+    'gi',
+  );
+  text = text.replace(shorthandRe, (_m, tagName: string, attrStr: string, body?: string) => {
+    rawCalls.push(...callFromTagBody(parseAttributes(attrStr ?? ''), body ?? '', tagName));
+    return '';
+  });
+
+  // <zeus_tool ...> / <od_tool ...> / <function_call ...>
+  text = text.replace(
+    /<(?:zeus_tool|od_tool|function_call)\b([^>]*?)(?:\/>|>([\s\S]*?)(?:<\/(?:zeus_tool|od_tool|function_call)\s*>|$))/gi,
+    (_m, attrStr: string, body?: string) => {
+      rawCalls.push(...callFromTagBody(parseAttributes(attrStr ?? ''), body ?? ''));
+      return '';
+    },
+  );
 
   // <tool_call ...>BODY</tool_call>   (closed, or unclosed at end of output)
   text = text.replace(/<tool_call\b([^>]*)>([\s\S]*?)(?:<\/tool_call\s*>|$)/gi, (_m, attrStr: string, inner: string) => {
@@ -328,53 +402,66 @@ export function extractToolCallsFromOutput(raw: string): { cleanedText: string; 
     if (parsed !== undefined) {
       const calls = callsFromValue(parsed);
       if (calls.length > 0) {
-        toolCalls.push(...calls);
+        rawCalls.push(...calls);
         return '';
       }
     }
     const salvaged = salvageWrite(body);
     if (salvaged) {
-      toolCalls.push(salvaged);
+      rawCalls.push(salvaged);
       return '';
     }
-    toolCalls.push(...callFromTagBody(attrs, inner));
-    return '';
-  });
-
-  // <zeus_tool name="write_file" path="x">BODY</zeus_tool>
-  text = text.replace(/<zeus_tool\b([^>]*)>([\s\S]*?)(?:<\/zeus_tool\s*>|$)/gi, (_m, attrStr: string, body: string) => {
-    toolCalls.push(...callFromTagBody(parseAttributes(attrStr ?? ''), body));
+    rawCalls.push(...callFromTagBody(attrs, inner));
     return '';
   });
 
   // Anthropic-style <invoke name="...">...</invoke>, optionally inside <function_calls>
-  text = text.replace(/<invoke\s+name=["']([^"']+)["']\s*>([\s\S]*?)<\/invoke>/gi, (_m, rawName: string, block: string) => {
-    const args: Record<string, unknown> = {};
-    const paramRe = /<parameter\s+name=["']([^"']+)["']\s*>([\s\S]*?)<\/parameter>/gi;
-    let pm: RegExpExecArray | null;
-    while ((pm = paramRe.exec(block)) !== null) args[pm[1]!] = pm[2]!;
-    toolCalls.push(...callsFromValue({ name: rawName, arguments: args }));
+  text = text.replace(/<(?:antml:)?invoke\s+name=["']([^"']+)["']\s*>([\s\S]*?)<\/(?:antml:)?invoke>/gi, (_m, rawName: string, block: string) => {
+    const args = extractXmlParams(block);
+    rawCalls.push(...callsFromValue({ name: rawName, arguments: args }));
     return '';
   });
-  text = text.replace(/<\/?function_calls>/gi, '');
+  text = text.replace(/<\/?(?:antml:)?function_calls>/gi, '');
 
   // ```json / ```tool_call fenced JSON that is clearly a tool call
   text = text.replace(/```(?:json|tool_call|tool|tool_code)?[ \t]*\r?\n([\s\S]*?)```/gi, (full, inner: string) => {
     const trimmed = inner.trim();
     if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return full;
-    const calls = callsFromValue(parseLooseJson(trimmed)).filter((c) => isKnownTool(c.name));
-    if (calls.length === 0) return full;
-    toolCalls.push(...calls);
+    const parsed = parseLooseJson(trimmed);
+    const calls = parsed !== undefined ? callsFromValue(parsed) : (salvageWrite(trimmed) ? [salvageWrite(trimmed)!] : []);
+    const valid = calls.filter((c) => isKnownTool(c.name));
+    if (valid.length === 0) return full;
+    rawCalls.push(...valid);
     return '';
   });
 
   // A bare JSON object on its own line carrying a known tool name
   text = text.replace(/^[ \t]*(\{\s*"(?:name|tool)"\s*:\s*"[^"]+"[\s\S]*?\})[ \t]*$/gm, (full, inner: string) => {
-    const calls = callsFromValue(parseLooseJson(inner)).filter((c) => isKnownTool(c.name));
-    if (calls.length === 0) return full;
-    toolCalls.push(...calls);
+    const parsed = parseLooseJson(inner);
+    const calls = parsed !== undefined ? callsFromValue(parsed) : (salvageWrite(inner) ? [salvageWrite(inner)!] : []);
+    const valid = calls.filter((c) => isKnownTool(c.name));
+    if (valid.length === 0) return full;
+    rawCalls.push(...valid);
     return '';
   });
+
+  // Final normalisation pass: never emit a wrapper tag name (e.g. zeus_tool / tool_call)
+  const toolCalls: ParsedToolCall[] = [];
+  for (const call of rawCalls) {
+    const norm = normalizeToolName(call.name);
+    if (isKnownTool(norm)) {
+      toolCalls.push({ name: norm, arguments: canonicalizeToolArgs(norm, call.arguments) });
+      continue;
+    }
+    const inferred = inferToolFromArgs(call.arguments);
+    if (inferred) {
+      toolCalls.push({ name: inferred.name, arguments: canonicalizeToolArgs(inferred.name, inferred.arguments) });
+      continue;
+    }
+    if (!WRAPPER_NAMES.has(squash(norm))) {
+      toolCalls.push({ name: norm, arguments: call.arguments });
+    }
+  }
 
   return { cleanedText: text.trim(), toolCalls };
 }
@@ -389,16 +476,38 @@ interface HiddenRule {
 }
 
 const HIDDEN_RULES: HiddenRule[] = [
+  { open: /^<Write\b[^>]*>/i, close: /<\/Write\s*>/i },
+  { open: /^<write_file\b[^>]*>/i, close: /<\/write_file\s*>/i },
+  { open: /^<Edit\b[^>]*>/i, close: /<\/Edit\s*>/i },
+  { open: /^<Read\b[^>]*>/i, close: /<\/Read\s*>/i },
+  { open: /^<Bash\b[^>]*>/i, close: /<\/Bash\s*>/i },
+  { open: /^<TodoWrite\b[^>]*>/i, close: /<\/TodoWrite\s*>/i },
   { open: /^<tool_call\b[^>]*>/i, close: /<\/tool_call\s*>/i },
   { open: /^<zeus_tool\b[^>]*>/i, close: /<\/zeus_tool\s*>/i },
+  { open: /^<od_tool\b[^>]*>/i, close: /<\/od_tool\s*>/i },
   { open: /^<function_calls>/i, close: /<\/function_calls>/i },
-  { open: /^<invoke\b[^>]*>/i, close: /<\/invoke>/i },
+  { open: /^<(?:antml:)?invoke\b[^>]*>/i, close: /<\/(?:antml:)?invoke>/i },
   { open: /^<artifact\b[^>]*>/i, close: /<\/artifact\s*>/i },
   { open: /^<artboard\b[^>]*>/i, close: /<\/artboard\s*>/i },
   { open: /^```(?:html|json|tool_call|tool)[^\n]*\n/i, close: /```/ },
 ];
 
-const HIDDEN_PREFIXES = ['<tool_call', '<zeus_tool', '<function_calls', '<invoke', '<artifact', '<artboard', '```'];
+const HIDDEN_PREFIXES = [
+  '<write',
+  '<edit',
+  '<read',
+  '<bash',
+  '<todowrite',
+  '<tool_call',
+  '<zeus_tool',
+  '<od_tool',
+  '<function_calls',
+  '<invoke',
+  '<antml:invoke',
+  '<artifact',
+  '<artboard',
+  '```',
+];
 
 /**
  * Splits streamed model output into thinking text, visible prose, and hidden

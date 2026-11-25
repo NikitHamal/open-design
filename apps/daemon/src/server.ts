@@ -23,6 +23,7 @@ import type {
 } from '@open-design/sidecar-proto';
 import express from 'express';
 import { registerAppUpdateRoutes } from './app-update.js';
+import { ensureFfmpeg } from './media/ffmpeg-lazy.js';
 import multer from 'multer';
 import JSZip from 'jszip';
 import { execFile } from 'node:child_process';
@@ -8778,6 +8779,7 @@ export async function startServer({
   };
 
   registerAppUpdateRoutes(app);
+  if (process.env.OD_APP_VERSION) setTimeout(() => void ensureFfmpeg(), 20_000).unref();
 
   app.get('/api/health', async (_req, res) => {
     const versionInfo = await readCurrentAppVersionInfo();

@@ -35,7 +35,6 @@ const EXTERNALS = {
   'better-sqlite3': '12.10.0',
   'node-pty': '1.1.0',
   'blake3-wasm': '2.1.5',
-  '@ffmpeg-installer/ffmpeg': '1.1.0',
   hyperframes: '0.8.1',
 };
 
@@ -61,6 +60,7 @@ await build({
   format: 'esm',
   target: 'node24',
   external: Object.keys(EXTERNALS),
+  alias: { '@ffmpeg-installer/ffmpeg': join(root, 'apps', 'daemon', 'src', 'media', 'ffmpeg-lazy.ts') },
   banner: { js: "import{createRequire as __odCreateRequire}from'node:module';const require=__odCreateRequire(import.meta.url);" },
   legalComments: 'none',
   minifySyntax: true,
@@ -73,6 +73,7 @@ const RESOURCE_DIRS = ['skills', 'design-systems', 'design-templates', 'plugins'
 for (const dir of RESOURCE_DIRS) {
   if (existsSync(join(root, dir))) cpSync(join(root, dir), join(app, dir), { recursive: true, dereference: true });
 }
+pruneResources(app);
 writeFileSync(join(app, 'package.json'), JSON.stringify({ name: 'opendesigns', version, private: true, type: 'module' }, null, 2));
 
 // 4. External modules (native + hyperframes) installed flat for the host platform
@@ -105,6 +106,24 @@ cpSync(process.execPath, join(nodeDir, isWin ? 'node.exe' : 'node'));
 
 report();
 
+function pruneResources(dir) {
+  // Gallery previews and generated verification output are not needed at runtime.
+  const dropFile = /(^|[\\/])preview[^\\/]*\.(mp4|webm|gif)$/i;
+  const dropDir = new Set(['verify-output', '__pycache__', 'node_modules']);
+  (function walk(current) {
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const full = join(current, entry.name);
+      if (entry.isDirectory()) {
+        if (dropDir.has(entry.name) || (entry.name === 'readme' && /docs$/.test(current))) rmSync(full, { recursive: true, force: true });
+        else walk(full);
+      } else if (dropFile.test(full) || /\.(pyc|map)$/i.test(entry.name)) {
+        rmSync(full, { force: true });
+      }
+    }
+  })(dir);
+  rmSync(join(dir, 'apps', 'web', 'out', 'remixicon.ttf'), { force: true });
+}
+
 function pruneModules(dir) {
   // Conservative: docs/tests/maps plus known build-time and foreign-platform payloads.
   const junkDirs = new Set(['test', 'tests', '__tests__', 'docs', 'example', 'examples', '.github']);
@@ -121,6 +140,11 @@ function pruneModules(dir) {
     'node-pty/third_party',
     'node-pty/build',
     'node-pty/scripts',
+    'prettier',
+    '@google',
+    'onnxruntime-node',
+    'hyperframes/dist/docker',
+    'hyperframes/dist/docs',
   ];
   for (const rel of dropPaths) rmSync(join(dir, rel), { recursive: true, force: true });
 

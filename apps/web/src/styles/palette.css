@@ -1,0 +1,135 @@
+/* Material 3 expressive tonal palette: green-teal seed, AA text contrast,
+   no shadows. Loaded last among the token sheets so it owns the values. */
+:root {
+  --bg: #fbfcf8;
+  --bg-app: #fbfcf8;
+  --bg-panel: #f1f3ec;
+  --bg-subtle: #e6e9df;
+  --bg-muted: #d3d7ca;
+  --bg-elevated: #f1f3ec;
+  --bg-fill-tertiary: rgba(24, 40, 20, 0.04);
+  --bg-fill-secondary: rgba(24, 40, 20, 0.08);
+  --bg-fill: rgba(24, 40, 20, 0.14);
+  --glass-regular: rgba(241, 243, 236, 0.86);
+  --border: #c2c7b8;
+  --border-strong: #8a9080;
+  --border-selected: #4b5a44;
+  --border-soft: #dde1d4;
+  --text: #2a2f26;
+  --text-strong: #11150f;
+  --text-muted: #454b3f;
+  --text-soft: #5b6154;
+  --text-faint: #7f8576;
+  --select-ink: #11150f;
+  --accent: #1b6a46;
+  --accent-contrast: #ffffff;
+  --accent-strong: #0f4f31;
+  --accent-soft: #cfeedb;
+  --accent-tint: #e7f5ec;
+  --accent-hover: #0f4f31;
+  --brand: #2e9c68;
+  --brand-weak: #bde7d0;
+  --brand-soft: #e1f4e9;
+  --brand-text: #0d4c2f;
+  --brand-ink: #0d4c2f;
+  --brand-surface: #e1f4e9;
+  --send-ground: #1b6a46;
+  --send-ink: #ffffff;
+  --upgrade-ground: #1b6a46;
+  --upgrade-ink: #ffffff;
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+}
+
+[data-theme="dark"] {
+  --bg: #111410;
+  --bg-app: #111410;
+  --bg-panel: #1a1d18;
+  --bg-subtle: #252923;
+  --bg-muted: #333830;
+  --bg-elevated: #1a1d18;
+  --bg-fill-tertiary: rgba(236, 244, 228, 0.06);
+  --bg-fill-secondary: rgba(236, 244, 228, 0.10);
+  --bg-fill: rgba(236, 244, 228, 0.17);
+  --glass-regular: rgba(26, 29, 24, 0.86);
+  --border: #3b4137;
+  --border-strong: #6c7366;
+  --border-selected: #9ba293;
+  --border-soft: #292d26;
+  --text: #e1e5d9;
+  --text-strong: #f5f8ef;
+  --text-muted: #c1c6b6;
+  --text-soft: #a2a897;
+  --text-faint: #71776b;
+  --accent: #8dd7ac;
+  --accent-contrast: #072916;
+  --accent-strong: #b1ecc8;
+  --accent-soft: #1f4531;
+  --accent-tint: #19281f;
+  --accent-hover: #b1ecc8;
+  --brand: #8dd7ac;
+  --brand-weak: #2b6849;
+  --brand-soft: #16321f;
+  --brand-text: #b1ecc8;
+  --brand-ink: #b1ecc8;
+  --brand-surface: #16321f;
+  --send-ground: #8dd7ac;
+  --send-ink: #072916;
+  --upgrade-ground: #8dd7ac;
+  --upgrade-ink: #072916;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme]) {
+    --bg: #111410;
+    --bg-app: #111410;
+    --bg-panel: #1a1d18;
+    --bg-subtle: #252923;
+    --bg-muted: #333830;
+    --bg-elevated: #1a1d18;
+    --bg-fill-tertiary: rgba(236, 244, 228, 0.06);
+    --bg-fill-secondary: rgba(236, 244, 228, 0.10);
+    --bg-fill: rgba(236, 244, 228, 0.17);
+    --glass-regular: rgba(26, 29, 24, 0.86);
+    --border: #3b4137;
+    --border-strong: #6c7366;
+    --border-selected: #9ba293;
+    --border-soft: #292d26;
+    --text: #e1e5d9;
+    --text-strong: #f5f8ef;
+    --text-muted: #c1c6b6;
+    --text-soft: #a2a897;
+    --text-faint: #71776b;
+    --accent: #8dd7ac;
+    --accent-contrast: #072916;
+    --accent-strong: #b1ecc8;
+    --accent-soft: #1f4531;
+    --accent-tint: #19281f;
+    --accent-hover: #b1ecc8;
+    --brand: #8dd7ac;
+    --brand-weak: #2b6849;
+    --brand-soft: #16321f;
+    --brand-text: #b1ecc8;
+    --brand-ink: #b1ecc8;
+    --brand-surface: #16321f;
+    --send-ground: #8dd7ac;
+    --send-ink: #072916;
+    --upgrade-ground: #8dd7ac;
+    --upgrade-ink: #072916;
+  }
+}
+
+/* House rule: no box shadows anywhere; focus uses an outline. */
+*, *::before, *::after { box-shadow: none !important; text-shadow: none !important; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Primary send control and the composer model picker read as one family. */
+html .composer-send:not(#_) { background: var(--send-ground); color: var(--send-ink); }
+html .composer-send:not(#_):hover:not(:disabled) { background: var(--accent-strong); }
+html .zpick-trigger:not(#_) { background: var(--bg); color: var(--text-strong); }
+html .zpick-trigger:not(#_):hover, html .zpick-trigger[data-open="true"]:not(#_) { background: var(--accent-soft); }
+html .zpick-pop:not(#_) { background: var(--bg); border-color: var(--border-strong); }
+html .zpick-row[data-active="true"]:not(#_) { background: var(--accent-soft); color: var(--accent-strong); }
+html .zpick-row__prov:not(#_), html .zpick-row__ctx:not(#_) { color: var(--text-soft); }

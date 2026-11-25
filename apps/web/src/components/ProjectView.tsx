@@ -14605,9 +14605,18 @@ export function ProjectView({
   // CLI / agent selector lives below the chat conversation (composer footer),
   // not in the top-right header.
   const executionControls = (
-    <>
-      
-    </>
+    <InlineModelSwitcher
+      compact
+      config={config}
+      agents={agents}
+      daemonLive={daemonLive}
+      onModeChange={onModeChange}
+      onAgentChange={onAgentChange}
+      onAgentModelChange={onAgentModelChange}
+      onApiProtocolChange={() => {}}
+      onApiModelChange={(model) => onApiModelChange?.(model)}
+      onOpenSettings={onOpenSettings}
+    />
   );
 
   let rejectedComposerSend: RejectedComposerSend | undefined;

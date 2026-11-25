@@ -3,6 +3,7 @@
 @import './styles/tokens.css';
 @import './styles/share-tokens.css';
 @import './styles/material.css';
+@import './styles/palette.css';
 @import './styles/app-wash.css';
 @import './styles/base.css';
 @import '../../../packages/components/src/styles.css';

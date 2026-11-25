@@ -21,6 +21,7 @@ import {
   inferToolFromArgs,
   isKnownTool,
   normalizeToolName,
+  stripReasoningBlocks,
   type ParsedToolCall,
 } from './tool-parser.js';
 
@@ -455,6 +456,7 @@ async function handleExecuteCommand(
   ];
 
   const wroteFiles: string[] = [];
+  let doneEmitted = false;
   let totalInputChars = (userPromptText || cmd.prompt).length;
   let totalOutputChars = 0;
   const MAX_ROUNDS = 6;
@@ -475,8 +477,13 @@ async function handleExecuteCommand(
 
       let roundRawText = '';
       const splitter = new StreamSplitter(
-        (text) =>
-          writeFrame({ v: 1, type: 'text', request_id: requestId, content: text }),
+        (text) => {
+          if (round > 0 && wroteFiles.length > 0 && doneKey && !doneEmitted && text.trim()) {
+            doneEmitted = true;
+            writeFrame({ v: 1, type: 'text', request_id: requestId, content: `<od-done key="${doneKey}"/>\n` });
+          }
+          writeFrame({ v: 1, type: 'text', request_id: requestId, content: text });
+        },
         (think) => {
           if (think) writeFrame({ v: 1, type: 'thinking', request_id: requestId, content: think });
         },
@@ -512,8 +519,8 @@ async function handleExecuteCommand(
       );
       splitter.end();
 
-      // Strip <think>...</think> before parsing tool calls and final text
-      const withoutThink = roundRawText.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '').trim();
+      // Strip all reasoning variants (<think>, <thinking>, <thought>, orphan </think>) before parsing tool calls
+      const { withoutThink } = stripReasoningBlocks(roundRawText);
       const { cleanedText, toolCalls } = extractToolCallsFromOutput(withoutThink);
 
       if (toolCalls.length > 0) {
@@ -534,7 +541,17 @@ async function handleExecuteCommand(
             arguments: JSON.stringify(tc.arguments),
           });
           const res = await executeLocalTool(cwd, tc);
-          if (res.wroteFile) wroteFiles.push(res.wroteFile);
+          if (res.wroteFile) {
+            wroteFiles.push(res.wroteFile);
+            if (doneKey) {
+              writeFrame({
+                v: 1,
+                type: 'text',
+                request_id: requestId,
+                content: `<od-focus key="${doneKey}" open="${res.wroteFile}"/>`,
+              });
+            }
+          }
           writeFrame({
             v: 1,
             type: 'tool_result',
@@ -579,7 +596,17 @@ async function handleExecuteCommand(
             arguments: JSON.stringify(writeArgs),
           });
           const res = await executeLocalTool(cwd, { name: 'Write', arguments: writeArgs });
-          if (res.wroteFile) wroteFiles.push(res.wroteFile);
+          if (res.wroteFile) {
+            wroteFiles.push(res.wroteFile);
+            if (doneKey) {
+              writeFrame({
+                v: 1,
+                type: 'text',
+                request_id: requestId,
+                content: `<od-focus key="${doneKey}" open="${res.wroteFile}"/>`,
+              });
+            }
+          }
           writeFrame({
             v: 1,
             type: 'tool_result',
@@ -589,9 +616,6 @@ async function handleExecuteCommand(
             output: res.output,
             is_error: res.isError,
           });
-        }
-        if (!splitter.visibleEmitted) {
-          finalVisibleText = `Created ${fallback.artifacts.map((a) => `\`${a.filename}\``).join(', ')}.`;
         }
       } else if (splitter.hiddenSpans.length > 0) {
         // Hidden spans that were neither tool calls nor artifacts: show them as-is.
@@ -603,7 +627,7 @@ async function handleExecuteCommand(
         wroteFiles.length === 0 &&
         fallback.artifacts.length === 0 &&
         round < MAX_ROUNDS - 1 &&
-        /\b(created|saved|wrote|written|updated|generated|built)\b[^.\n]{0,80}\.(html?|css|js|svg|md)\b/i.test(cleanedText);
+        /\b(created|saved|wrote|written|generated|built)\b[^.\n]{0,80}\.(html?|css|js|svg|md)\b/i.test(cleanedText);
       if (claimsWrite) {
         messages.push({ role: 'assistant', content: withoutThink });
         messages.push({
@@ -614,14 +638,14 @@ async function handleExecuteCommand(
         continue;
       }
 
+      if (!splitter.visibleEmitted && !finalVisibleText.trim() && wroteFiles.length > 0) {
+        finalVisibleText = `Created ${[...new Set(wroteFiles)].map((f) => `\`${f}\``).join(', ')}.`;
+      }
+
       const savedAssistantText = cleanedText || finalVisibleText;
-      if (doneKey) {
-        if (wroteFiles.length > 0 && !cleanedText.includes('<od-focus')) {
-          finalVisibleText += `\n<od-focus key="${doneKey}" open="${wroteFiles[wroteFiles.length - 1]}"/>`;
-        }
-        if (!cleanedText.includes('<od-done') && !cleanedText.includes('<question-form')) {
-          finalVisibleText += `\n<od-done key="${doneKey}"/>`;
-        }
+      if (doneKey && finalVisibleText.trim() && !doneEmitted && !cleanedText.includes('<od-done') && !cleanedText.includes('<question-form')) {
+        doneEmitted = true;
+        finalVisibleText = `<od-done key="${doneKey}"/>\n${finalVisibleText}`;
       }
 
       if (finalVisibleText) {

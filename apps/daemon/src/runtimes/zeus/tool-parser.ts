@@ -371,8 +371,40 @@ function salvageWrite(body: string): ParsedToolCall | undefined {
 const SHORTHAND_TOOL_TAGS =
   'Write|write_file|create_file|Edit|edit_file|Read|read_file|Bash|shell|run_command|Glob|list_dir|Grep|search_code|WebFetch|web_fetch|TodoWrite|todo_write';
 
+/** Strip all reasoning blocks (including orphan closing </think> tags and <thinking>/<thought>/<reasoning>). */
+export function stripReasoningBlocks(raw: string): { withoutThink: string; extractedThink: string } {
+  let working = raw;
+  const thoughts: string[] = [];
+
+  const orphanCloseTags = ['</think>', '</thinking>', '</thought>', '</reasoning>', '<|end_of_thought|>'];
+  for (const closeTag of orphanCloseTags) {
+    const openTag = closeTag.replace('</', '<').replace('<|end_', '<|begin_');
+    const lower = working.toLowerCase();
+    const closeIdx = lower.indexOf(closeTag);
+    if (closeIdx >= 0 && !lower.slice(0, closeIdx).includes(openTag)) {
+      const before = working.slice(0, closeIdx).trim();
+      if (before) thoughts.push(before);
+      working = working.slice(closeIdx + closeTag.length);
+    }
+  }
+
+  working = working.replace(
+    /<(think|thinking|thought|reasoning)\b[^>]*>([\s\S]*?)(?:<\/\1\s*>|$)|<\|begin_of_thought\|>([\s\S]*?)(?:<\|end_of_thought\|>|$)|<details\b[^>]*type=["']?reasoning["']?[^>]*>([\s\S]*?)(?:<\/details\s*>|$)/gi,
+    (_m, _tag, b1, b2, b3) => {
+      const body = String(b1 ?? b2 ?? b3 ?? '').trim();
+      if (body) thoughts.push(body);
+      return '';
+    },
+  );
+
+  return {
+    withoutThink: working.trim(),
+    extractedThink: thoughts.join('\n\n').trim(),
+  };
+}
+
 export function extractToolCallsFromOutput(raw: string): { cleanedText: string; toolCalls: ParsedToolCall[] } {
-  let text = raw;
+  let text = stripReasoningBlocks(raw).withoutThink;
   const rawCalls: ParsedToolCall[] = [];
 
   // Direct shorthand XML tags (<Write path="...">...</Write>, <Read path="..."/>, etc.)
@@ -549,14 +581,14 @@ export class StreamSplitter {
   private drain(final: boolean): void {
     for (let guard = 0; guard < 10_000; guard++) {
       if (this.mode === 'think') {
-        const m = /<\/think>/i.exec(this.buf);
+        const m = /<\/(?:think|thinking|thought|reasoning)\s*>|<\|end_of_thought\|>/i.exec(this.buf);
         if (m) {
           this.onThink(this.buf.slice(0, m.index));
           this.buf = this.buf.slice(m.index + m[0].length);
           this.mode = 'text';
           continue;
         }
-        const keep = final ? 0 : this.partialSuffix(this.buf, '</think>');
+        const keep = final ? 0 : Math.min(this.buf.length, 18);
         const out = this.buf.slice(0, this.buf.length - keep);
         if (out) this.onThink(out);
         this.buf = this.buf.slice(this.buf.length - keep);
@@ -591,7 +623,7 @@ export class StreamSplitter {
       }
       this.emitText(this.buf.slice(0, lt));
       this.buf = this.buf.slice(lt);
-      const think = /^<think>/i.exec(this.buf);
+      const think = /^<(?:think|thinking|thought|reasoning)\b[^>]*>|^<\|begin_of_thought\|>/i.exec(this.buf);
       if (think) {
         this.buf = this.buf.slice(think[0].length);
         this.mode = 'think';
@@ -609,7 +641,7 @@ export class StreamSplitter {
       const lower = this.buf.toLowerCase();
       const couldBeTag =
         !final &&
-        (('<think>'.startsWith(lower) || lower.startsWith('<think')) && !lower.includes('>')
+        ((['<think', '<thinking', '<thought', '<reasoning', '<|begin_of_thought|>'].some((p) => p.startsWith(lower) || lower.startsWith(p))) && !lower.includes('>')
           ? true
           : HIDDEN_PREFIXES.some((p) => p.startsWith(lower) || (lower.startsWith(p) && !lower.includes('>') && p !== '```')) ||
             (lower.startsWith('```') && !lower.includes('\n')));

@@ -1463,7 +1463,7 @@ export function buildTurnBlocks(input: BuildTurnInput): TurnBlock[] {
    * 提出来当结论。只动这一次,不在流式中途挪动(中途挪动正是候选 E 的代价)。
    */
   function liftConclusion(): void {
-    if (doneSeen) return;
+    if (doneSeen && blocks.some((b) => b.kind === 'prose' && b.text.trim())) return;
     const shell = todoCard ?? top;
     if (!shell) return;
     /*

@@ -68,6 +68,20 @@ jobs:
       - name: Build payload
         run: node scripts/build-app.mjs
 
+      - name: Smoke test packaged daemon
+        shell: bash
+        run: |
+          OD_DATA_DIR="$RUNNER_TEMP/od-smoke" OD_NO_TELEMETRY=1 OD_APP_VERSION="$VER" \
+            .stage/node/node.exe .stage/app/apps/daemon/dist/cli.mjs --no-open --port 17999 > "$RUNNER_TEMP/daemon.log" 2>&1 &
+          for i in $(seq 1 60); do
+            curl -fs http://127.0.0.1:17999/api/health > /dev/null && break
+            sleep 1
+          done
+          curl -fs http://127.0.0.1:17999/api/health | head -c 300; echo
+          curl -fs http://127.0.0.1:17999/ | head -c 200; echo
+          curl -fs http://127.0.0.1:17999/api/agents | head -c 400; echo
+          taskkill //F //IM node.exe > /dev/null 2>&1 || true
+
       - name: Generate icons
         run: npx --yes @tauri-apps/cli@2 icon ../apps/web/public/app-icon.png
         working-directory: src-tauri

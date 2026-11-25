@@ -13,54 +13,57 @@ import {
   reasoningTiers,
 } from './catalog.js';
 import { streamZeusProvider } from './scrapers.js';
+import {
+  StreamSplitter,
+  SUPPORTED_TOOLS,
+  extractToolCallsFromOutput,
+  type ParsedToolCall,
+} from './tool-parser.js';
+
+export { extractToolCallsFromOutput };
 
 const execAsync = promisify(exec);
 
-const ZEUS_BRIDGE_SYSTEM_PROMPT = `You are Zeus Engine running inside OpenDesign with full local workspace access.
-
-NON-NEGOTIABLE DESIGN, UI & ENGINEERING LAWS (ENFORCE EVERYWHERE):
-- no box shadows (always use box-shadow: none; rely on tonal surface hierarchy and crisp 1px borders)
-- no emojis anywhere in UI copy, headings, badges, or chat responses
-- 0 ' LIVE ' badges
-- no blue/purple gradients
-- Cut taglines, helper text and secondary labels. If a screen needs them to make sense, fix the layout.
-- Typography: use 'Google Sans Flex' for UI/display/sans and 'Roboto Mono' for code/monospace.
-
-TOOL CALLING & ARTIFACT PROTOCOL:
-You can execute workspace tools by emitting <tool_call> JSON blocks (outside <think>):
-<tool_call>{"name": "TodoWrite", "arguments": {"todos": [{"id": "1", "content": "Design screen layout", "status": "in_progress", "priority": "high"}]}}</tool_call>
-<tool_call>{"name": "Read", "arguments": {"file_path": "index.html"}}</tool_call>
-<tool_call>{"name": "Write", "arguments": {"file_path": "dashboard.html", "content": "<!DOCTYPE html>\\n<html>...</html>"}}</tool_call>
-<tool_call>{"name": "Edit", "arguments": {"file_path": "dashboard.html", "old_string": "...", "new_string": "..."}}</tool_call>
-<tool_call>{"name": "Bash", "arguments": {"command": "ls -la"}}</tool_call>
-<tool_call>{"name": "Glob", "arguments": {"pattern": "**/*.html"}}</tool_call>
-<tool_call>{"name": "Grep", "arguments": {"pattern": "function", "path": "."}}</tool_call>
-
-You may also emit <zeus_tool name="write_file" path="dashboard.html">...full file content...</zeus_tool> or <zeus_tool name="read_file" path="..."></zeus_tool> or <zeus_tool name="run_command" command="..."></zeus_tool>.
-When creating or updating any HTML design, prototype, slide deck, or HyperFrames video, always write the complete, self-contained file to the project directory using Write (or <zeus_tool name="write_file" path="...">).`;
-
-interface ParsedToolCall {
-  name: string;
-  arguments: Record<string, unknown>;
-}
+const ZEUS_BRIDGE_SYSTEM_PROMPT = [
+  'You are Zeus Engine, a design and coding agent running inside OpenDesign with full access to the project workspace through tools.',
+  '',
+  'DESIGN LAWS (apply to every screen you produce):',
+  '- No box shadows. Use box-shadow: none and separate surfaces with tonal fills and 1px borders.',
+  '- No emojis in UI copy, headings, badges or chat replies.',
+  '- No "LIVE" badges. No blue or purple gradients.',
+  '- Cut taglines, helper text and secondary labels. If a screen needs them to make sense, fix the layout.',
+  "- Typography: 'Google Sans Flex' for UI, display and body; 'Roboto Mono' for code.",
+  '- Keep text contrast at WCAG AA or better in both light and dark surfaces.',
+  '',
+  'TOOLS. You have no native function calling. To act, write a tool block in your reply. The host executes it and answers with a <tool_result> message, then you continue.',
+  '',
+  'Create or overwrite a file (preferred for HTML, CSS, JS: write the raw file body, no JSON escaping):',
+  '<zeus_tool name="Write" path="landing.html">',
+  '<!DOCTYPE html>',
+  '...complete self-contained file...',
+  '</zeus_tool>',
+  '',
+  'All other tools use one JSON object per block, valid JSON, on a single line:',
+  '<tool_call>{"name":"Read","arguments":{"file_path":"landing.html"}}</tool_call>',
+  '<tool_call>{"name":"Edit","arguments":{"file_path":"landing.html","old_string":"exact old text","new_string":"new text"}}</tool_call>',
+  '<tool_call>{"name":"Bash","arguments":{"command":"ls -la"}}</tool_call>',
+  '<tool_call>{"name":"Glob","arguments":{"pattern":"**/*.html"}}</tool_call>',
+  '<tool_call>{"name":"Grep","arguments":{"pattern":"function","path":"."}}</tool_call>',
+  '<tool_call>{"name":"WebFetch","arguments":{"url":"https://example.com"}}</tool_call>',
+  '<tool_call>{"name":"TodoWrite","arguments":{"todos":[{"id":"1","content":"Build layout","status":"in_progress"}]}}</tool_call>',
+  '',
+  'Rules:',
+  '- The "name" field is always one of: Write, Read, Edit, Bash, Glob, Grep, WebFetch, TodoWrite. Never use "tool_call" as a name.',
+  '- Every design, prototype, slide deck or video must be saved with Write as a complete self-contained file in the project directory, using a relative path such as landing.html.',
+  '- Never say a file was created or changed unless its <tool_result> reported success. If a result is an error, fix the call and retry.',
+  '- After the last tool result, reply with a short plain-language summary and no tool block.',
+].join('\n');
 
 type FrameWriter = (frame: Record<string, unknown>) => void;
 
 const defaultWriteFrame: FrameWriter = (frame) => {
   process.stdout.write(`${JSON.stringify(frame)}\n`);
 };
-
-function normalizeToolName(raw: string): string {
-  const lower = raw.trim().toLowerCase();
-  if (lower === 'todowrite' || lower === 'todo_write' || lower === 'update_plan') return 'TodoWrite';
-  if (lower === 'write' || lower === 'write_file' || lower === 'create_file') return 'Write';
-  if (lower === 'read' || lower === 'read_file' || lower === 'view_file') return 'Read';
-  if (lower === 'edit' || lower === 'edit_file' || lower === 'replace_in_file') return 'Edit';
-  if (lower === 'bash' || lower === 'run_command' || lower === 'shell' || lower === 'exec') return 'Bash';
-  if (lower === 'glob' || lower === 'find_files' || lower === 'list_dir' || lower === 'ls') return 'Glob';
-  if (lower === 'grep' || lower === 'search_files' || lower === 'grep_files') return 'Grep';
-  return raw.trim();
-}
 
 function parseXmlAttributes(attrText: string): Record<string, string> {
   const attrs: Record<string, string> = {};
@@ -70,123 +73,6 @@ function parseXmlAttributes(attrText: string): Record<string, string> {
     attrs[m[1]!] = m[2] ?? m[3] ?? '';
   }
   return attrs;
-}
-
-export function extractToolCallsFromOutput(raw: string): {
-  cleanedText: string;
-  toolCalls: ParsedToolCall[];
-} {
-  let text = raw;
-  const toolCalls: ParsedToolCall[] = [];
-
-  // 1. <tool_call>{...}</tool_call>
-  const tcRegex = /<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/gi;
-  text = text.replace(tcRegex, (_match, inner: string) => {
-    try {
-      const parsed = JSON.parse(inner.trim()) as {
-        name?: string;
-        tool?: string;
-        arguments?: Record<string, unknown> | string;
-        input?: Record<string, unknown>;
-      };
-      const rawName = parsed.name ?? parsed.tool ?? '';
-      if (rawName) {
-        let args: Record<string, unknown> = {};
-        if (typeof parsed.arguments === 'string') {
-          try {
-            args = JSON.parse(parsed.arguments);
-          } catch {
-            args = { raw: parsed.arguments };
-          }
-        } else if (parsed.arguments && typeof parsed.arguments === 'object') {
-          args = parsed.arguments;
-        } else if (parsed.input && typeof parsed.input === 'object') {
-          args = parsed.input;
-        }
-        toolCalls.push({ name: normalizeToolName(rawName), arguments: args });
-      }
-    } catch {}
-    return '';
-  });
-
-  // 2. <zeus_tool ...>...</zeus_tool>
-  const ztRegex = /<zeus_tool\b([^>]*)>([\s\S]*?)<\/zeus_tool>/gi;
-  text = text.replace(ztRegex, (_match, attrStr: string, body: string) => {
-    const attrs = parseXmlAttributes(attrStr);
-    const rawName = attrs.name ?? attrs.tool ?? '';
-    if (!rawName) return '';
-    const name = normalizeToolName(rawName);
-    const trimmedBody = body.replace(/^\r?\n/, '').replace(/\r?\n$/, '');
-    if (name === 'Write') {
-      toolCalls.push({
-        name: 'Write',
-        arguments: {
-          file_path: attrs.path ?? attrs.file_path ?? attrs.file ?? 'index.html',
-          content: trimmedBody || attrs.content || '',
-        },
-      });
-    } else if (name === 'Read') {
-      toolCalls.push({
-        name: 'Read',
-        arguments: {
-          file_path: attrs.path ?? attrs.file_path ?? attrs.file ?? '',
-        },
-      });
-    } else if (name === 'Edit') {
-      toolCalls.push({
-        name: 'Edit',
-        arguments: {
-          file_path: attrs.path ?? attrs.file_path ?? attrs.file ?? '',
-          old_string: attrs.search ?? attrs.old_string ?? '',
-          new_string: attrs.replace ?? attrs.new_string ?? trimmedBody,
-        },
-      });
-    } else if (name === 'Bash') {
-      toolCalls.push({
-        name: 'Bash',
-        arguments: {
-          command: attrs.command ?? attrs.cmd ?? trimmedBody,
-        },
-      });
-    } else if (name === 'Glob') {
-      toolCalls.push({
-        name: 'Glob',
-        arguments: {
-          pattern: attrs.pattern ?? attrs.path ?? '*',
-        },
-      });
-    } else if (name === 'Grep') {
-      toolCalls.push({
-        name: 'Grep',
-        arguments: {
-          pattern: attrs.pattern ?? attrs.query ?? trimmedBody,
-          path: attrs.path ?? '.',
-        },
-      });
-    } else {
-      let parsedBody: Record<string, unknown> = { content: trimmedBody };
-      try {
-        parsedBody = JSON.parse(trimmedBody);
-      } catch {}
-      toolCalls.push({ name, arguments: { ...attrs, ...parsedBody } });
-    }
-    return '';
-  });
-
-  // 3. Anthropic-style <invoke name="...">...</invoke>
-  const invokeRegex = /<invoke\s+name=["']([^"']+)["']\s*>([\s\S]*?)<\/invoke>/gi;
-  text = text.replace(invokeRegex, (_match, rawName: string, paramsBlock: string) => {
-    const args: Record<string, unknown> = {};
-    const paramRe = /<parameter\s+name=["']([^"']+)["']\s*>([\s\S]*?)<\/parameter>/gi;
-    let pm: RegExpExecArray | null;
-    while ((pm = paramRe.exec(paramsBlock)) !== null) {
-      args[pm[1]!] = pm[2]!;
-    }
-    toolCalls.push({ name: normalizeToolName(rawName), arguments: args });
-    return '';
-  });
-
-  return { cleanedText: text.trim(), toolCalls };
 }
 
 function safeResolveInCwd(cwd: string, targetPath: string): string {
@@ -217,6 +103,7 @@ async function executeLocalTool(
           call.arguments.file_path ?? call.arguments.path ?? call.arguments.file ?? 'index.html',
         );
         const content = String(call.arguments.content ?? '');
+        if (!content.trim()) return { output: 'Write needs non-empty content. Resend with the complete file body.', isError: true };
         const fullPath = safeResolveInCwd(cwd, relPath);
         fs.mkdirSync(path.dirname(fullPath), { recursive: true });
         fs.writeFileSync(fullPath, content, 'utf8');
@@ -322,10 +209,17 @@ async function executeLocalTool(
           isError: false,
         };
       }
+      case 'WebFetch': {
+        const url = String(call.arguments.url ?? call.arguments.raw ?? '');
+        if (!/^https?:\/\//i.test(url)) return { output: 'WebFetch needs an absolute http(s) url', isError: true };
+        const res = await fetch(url, { signal: AbortSignal.timeout(20_000), headers: { 'user-agent': 'Mozilla/5.0' } });
+        const body = (await res.text()).replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, '');
+        return { output: `HTTP ${res.status}\n${body.slice(0, 16000)}`, isError: !res.ok };
+      }
       default:
         return {
-          output: `Executed ${call.name}`,
-          isError: false,
+          output: `Unknown tool "${call.name}". Use one of: ${SUPPORTED_TOOLS.join(', ')}. Resend the call with a valid name.`,
+          isError: true,
         };
     }
   } catch (err) {
@@ -545,7 +439,13 @@ async function handleExecuteCommand(
       }
 
       let roundRawText = '';
-      let inThinkTag = false;
+      const splitter = new StreamSplitter(
+        (text) =>
+          writeFrame({ v: 1, type: 'text', request_id: requestId, content: text }),
+        (think) => {
+          if (think) writeFrame({ v: 1, type: 'thinking', request_id: requestId, content: think });
+        },
+      );
 
       await streamZeusProvider(
         {
@@ -561,41 +461,7 @@ async function handleExecuteCommand(
         (delta) => {
           roundRawText += delta;
           totalOutputChars += delta.length;
-          if (delta.includes('<think>')) {
-            inThinkTag = true;
-            const cleaned = delta.replace(/<\/?think>/g, '');
-            if (cleaned) {
-              writeFrame({
-                v: 1,
-                type: 'thinking',
-                request_id: requestId,
-                content: cleaned,
-              });
-            }
-            if (delta.includes('</think>')) inThinkTag = false;
-            return;
-          }
-          if (inThinkTag) {
-            if (delta.includes('</think>')) {
-              const [thinkPart] = delta.split('</think>');
-              inThinkTag = false;
-              if (thinkPart) {
-                writeFrame({
-                  v: 1,
-                  type: 'thinking',
-                  request_id: requestId,
-                  content: thinkPart,
-                });
-              }
-            } else if (delta) {
-              writeFrame({
-                v: 1,
-                type: 'thinking',
-                request_id: requestId,
-                content: delta,
-              });
-            }
-          }
+          splitter.feed(delta);
         },
         (reasoningDelta) => {
           if (reasoningDelta) {
@@ -609,19 +475,15 @@ async function handleExecuteCommand(
         },
         signal,
       );
+      splitter.end();
 
       // Strip <think>...</think> before parsing tool calls and final text
-      const withoutThink = roundRawText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+      const withoutThink = roundRawText.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '').trim();
       const { cleanedText, toolCalls } = extractToolCallsFromOutput(withoutThink);
 
       if (toolCalls.length > 0) {
-        if (cleanedText) {
-          writeFrame({
-            v: 1,
-            type: 'text',
-            request_id: requestId,
-            content: `${cleanedText}\n\n`,
-          });
+        if (splitter.visibleEmitted) {
+          writeFrame({ v: 1, type: 'text', request_id: requestId, content: '\n\n' });
         }
         messages.push({ role: 'assistant', content: withoutThink });
         const toolResultsSummary: string[] = [];
@@ -664,7 +526,8 @@ async function handleExecuteCommand(
       const fallback = wroteFiles.length === 0
         ? extractFallbackHtmlArtifacts(cleanedText)
         : { artifacts: [], cleanedProse: cleanedText };
-      let finalVisibleText = cleanedText;
+      // Visible prose was already streamed live; only append what the splitter hid.
+      let finalVisibleText = '';
       if (fallback.artifacts.length > 0) {
         for (const art of fallback.artifacts) {
           const callId = `call_${randomUUID().slice(0, 12)}`;
@@ -692,17 +555,36 @@ async function handleExecuteCommand(
             is_error: res.isError,
           });
         }
-        finalVisibleText =
-          fallback.cleanedProse ||
-          `Created ${fallback.artifacts.map((a) => `\`${a.filename}\``).join(', ')}.`;
+        if (!splitter.visibleEmitted) {
+          finalVisibleText = `Created ${fallback.artifacts.map((a) => `\`${a.filename}\``).join(', ')}.`;
+        }
+      } else if (splitter.hiddenSpans.length > 0) {
+        // Hidden spans that were neither tool calls nor artifacts: show them as-is.
+        finalVisibleText = splitter.hiddenSpans.join('\n');
       }
 
-      const savedAssistantText = finalVisibleText;
+      // The model claims a file change but nothing was written: push it to actually do it.
+      const claimsWrite =
+        wroteFiles.length === 0 &&
+        fallback.artifacts.length === 0 &&
+        round < MAX_ROUNDS - 1 &&
+        /\b(created|saved|wrote|written|updated|generated|built)\b[^.\n]{0,80}\.(html?|css|js|svg|md)\b/i.test(cleanedText);
+      if (claimsWrite) {
+        messages.push({ role: 'assistant', content: withoutThink });
+        messages.push({
+          role: 'user',
+          content:
+            'Host notice: no file was written. Nothing exists on disk yet. Emit the complete file now with <zeus_tool name="Write" path="FILE.html">...</zeus_tool>, then summarise.',
+        });
+        continue;
+      }
+
+      const savedAssistantText = cleanedText || finalVisibleText;
       if (doneKey) {
-        if (wroteFiles.length > 0 && !finalVisibleText.includes('<od-focus')) {
+        if (wroteFiles.length > 0 && !cleanedText.includes('<od-focus')) {
           finalVisibleText += `\n<od-focus key="${doneKey}" open="${wroteFiles[wroteFiles.length - 1]}"/>`;
         }
-        if (!finalVisibleText.includes('<od-done') && !finalVisibleText.includes('<question-form')) {
+        if (!cleanedText.includes('<od-done') && !cleanedText.includes('<question-form')) {
           finalVisibleText += `\n<od-done key="${doneKey}"/>`;
         }
       }

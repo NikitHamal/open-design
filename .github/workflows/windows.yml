@@ -65,6 +65,11 @@ jobs:
           pnpm --filter @open-design/daemon exec tsc -p tsconfig.json --noEmit
           pnpm --filter @open-design/web exec tsc -b --noEmit
 
+      - name: Guard against blank root render
+        shell: bash
+        run: |
+          grep -q "<AppInner />" apps/web/src/App.tsx || { echo "App() does not render AppInner"; exit 1; }
+
       - name: Build payload
         run: node scripts/build-app.mjs
 

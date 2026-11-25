@@ -107,8 +107,8 @@ cpSync(process.execPath, join(nodeDir, isWin ? 'node.exe' : 'node'));
 report();
 
 function pruneResources(dir) {
-  // Gallery previews and generated verification output are not needed at runtime.
-  const dropFile = /(^|[\\/])preview[^\\/]*\.(mp4|webm|gif)$/i;
+  // Gallery previews, translated DESIGN-*.md copies, and verification output are not needed at runtime.
+  const dropFile = /(^|[\\/])preview[^\\/]*\.(mp4|webm|gif)$|(^|[\\/])DESIGN-[a-z]{2}(-[a-z]{2})?\.md$/i;
   const dropDir = new Set(['verify-output', '__pycache__', 'node_modules']);
   (function walk(current) {
     for (const entry of readdirSync(current, { withFileTypes: true })) {
@@ -125,12 +125,13 @@ function pruneResources(dir) {
 }
 
 function pruneModules(dir) {
-  // Conservative: docs/tests/maps plus known build-time and foreign-platform payloads.
+  // Conservative: docs/tests/maps/declarations plus known build-time and foreign-platform payloads.
   const junkDirs = new Set(['test', 'tests', '__tests__', 'docs', 'example', 'examples', '.github']);
-  const junkFiles = /\.(md|markdown|map|gyp|gypi|lib|pdb|obj|exp|cc|cpp|hpp)$|^(LICENSE|LICENCE|CHANGELOG|HISTORY|README|NOTICE)(\.\w+)?$/i;
+  const junkFiles = /\.(d\.m?ts|d\.cts|md|markdown|map|gyp|gypi|lib|pdb|obj|exp|cc|cpp|hpp)$|^(LICENSE|LICENCE|CHANGELOG|HISTORY|README|NOTICE)(\.\w+)?$/i;
   const foreign = /(darwin|linux|android|freebsd|openbsd|musl|arm64|arm|ia32|riscv|s390x|ppc64|wasm32)/i;
 
   const dropPaths = [
+    '@types',
     'better-sqlite3/deps',
     'better-sqlite3/src',
     'better-sqlite3/build/Release/obj',
@@ -154,7 +155,7 @@ function pruneModules(dir) {
       const isPkgRoot = current === dir || (dirname(current) === dir && dirname(current) !== current && /^@/.test(current.split(/[\\/]/).pop()));
       if (entry.isDirectory()) {
         if (!isPkgRoot && junkDirs.has(entry.name)) rmSync(full, { recursive: true, force: true });
-        else if (isWin && foreign.test(entry.name) && /(prebuilds|@img|@esbuild|@ffmpeg-installer|@rollup|@parcel|@next|@swc)/.test(full) && !/win32/.test(entry.name)) rmSync(full, { recursive: true, force: true });
+        else if (isWin && foreign.test(entry.name) && /(prebuilds|@img|@esbuild|@ffmpeg-installer|@rollup|@parcel|@next|@swc)/.test(full) && !/win32-x64/.test(entry.name)) rmSync(full, { recursive: true, force: true });
         else walk(full);
       } else if (junkFiles.test(entry.name)) {
         rmSync(full, { force: true });

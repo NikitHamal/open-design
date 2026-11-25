@@ -882,12 +882,16 @@ async function smokeHyperframesCli(
   copiedPackages,
 ) {
   const cliPath = path.join(appNodeModulesRoot, "hyperframes", "dist", "cli.js");
-  const nodePath = platformName === "win32"
+  const packagedExePath = platformName === "win32"
     ? path.join(appPath, `${productFilename}.exe`)
     : path.join(appPath, "Contents", "MacOS", productFilename);
+  // On Windows, spawning the packaged .exe inside afterPack causes Windows Defender / OS
+  // to hold a file lock when electron-builder immediately runs rcedit-x64.exe afterwards.
+  // Use process.execPath on win32 so the packaged .exe is never locked before rcedit.
+  const nodePath = platformName === "win32" ? process.execPath : packagedExePath;
   const requiredPaths = [
     cliPath,
-    nodePath,
+    packagedExePath,
     ...copiedPackages.map((entry) => path.join(entry.destinationPath, "package.json")),
   ];
   for (const requiredPath of requiredPaths) {

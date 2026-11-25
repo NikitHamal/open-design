@@ -65,10 +65,11 @@ jobs:
           pnpm --filter @open-design/daemon exec tsc -p tsconfig.json --noEmit
           pnpm --filter @open-design/web exec tsc -b --noEmit
 
-      - name: Guard against blank root render
+      - name: Guard against blank root render and verify tool parser
         shell: bash
         run: |
           grep -q "<AppInner />" apps/web/src/App.tsx || { echo "App() does not render AppInner"; exit 1; }
+          pnpm exec tsx apps/daemon/src/runtimes/zeus/tool-parser.test.ts
 
       - name: Build payload
         run: node scripts/build-app.mjs

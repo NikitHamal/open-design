@@ -3,6 +3,8 @@
 // must be deleted; this file goes away when the last import does.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { currentWorkspaceAccountGeneration } from './collab/workspace-identity';
+
 const inert: any = new Proxy(
   {},
   {
@@ -49,14 +51,23 @@ export const resolveDeepSeekV4FlashCampaignAudience = (..._args: any[]): any => 
 
 export type HomeAmrBalanceGateBlock = any;
 
-export const useProjectShareHistoryState = hook;
-export const useBatchProjectShareCount = hook;
-export const useShareSourceGuard = hook;
-export const useShareGuideAppUserId = hook;
-export const useAfterExportShareGuide = hook;
-export const useDeletedShareNotices = hook;
-export const useDeepSeekV4FlashCampaignVisibility = hook;
-export const useRegistrationInvite = hook;
-export const useGithubStars = hook;
-export const useDiscordPresence = hook;
-export const useDiagnosticsExport = hook;
+export const useProjectShareHistoryState = (..._args: any[]): any => ({ history: null, status: 'idle' });
+export const useBatchProjectShareCount = (..._args: any[]): any => ({
+  count: 0,
+  pending: false,
+  failed: false,
+  generation: currentWorkspaceAccountGeneration(),
+});
+export const useShareSourceGuard = (..._args: any[]): any => ({ isCurrent: () => true });
+export const useShareGuideAppUserId = (..._args: any[]): any => null;
+export const useAfterExportShareGuide = (..._args: any[]): any => ({
+  noticeId: null,
+  beginExport: () => noop,
+});
+export const useDeletedShareNotices = (..._args: any[]): any => ({ capture: () => undefined, notices: [] });
+export const useDeepSeekV4FlashCampaignVisibility = (..._args: any[]): any => ({ now: 0, visible: false });
+export const useRegistrationInvite = (..._args: any[]): any => null;
+export const useGithubStars = (..._args: any[]): any => null;
+export const useDiscordPresence = (..._args: any[]): any => null;
+export const useDiagnosticsExport = (..._args: any[]): any => ({ status: { kind: 'idle' }, busy: false, run: async () => undefined });
+void hook;

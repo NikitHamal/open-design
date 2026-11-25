@@ -18,7 +18,7 @@ concurrency:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     env:
       HUSKY: "0"
       CI: "true"
@@ -38,18 +38,22 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
       - name: Stamp release version
         shell: bash
         run: |
           node -e '
             const fs = require("fs");
-            const ver = process.env.VER;
-            for (const p of ["package.json", "apps/packaged/package.json", "apps/desktop/package.json", "apps/daemon/package.json", "apps/web/package.json"]) {
-              if (!fs.existsSync(p)) continue;
-              const j = JSON.parse(fs.readFileSync(p, "utf8"));
-              j.version = ver;
-              fs.writeFileSync(p, JSON.stringify(j, null, 2) + "\n");
-            }
+            const v = process.env.VER;
+            const edit = (p, fn) => fs.writeFileSync(p, fn(fs.readFileSync(p, "utf8")));
+            edit("package.json", (s) => s.replace(/"version": "[^"]+"/, `"version": "${v}"`));
+            edit("src-tauri/tauri.conf.json", (s) => s.replace(/"version": "[^"]+"/, `"version": "${v}"`));
+            edit("src-tauri/Cargo.toml", (s) => s.replace(/^version = "[^"]+"/m, `version = "${v}"`));
           '
 
       - name: Install
@@ -61,48 +65,32 @@ jobs:
           pnpm --filter @open-design/daemon exec tsc -p tsconfig.json --noEmit
           pnpm --filter @open-design/web exec tsc -b --noEmit
 
-      - name: Install NSIS
-        shell: pwsh
-        run: |
-          choco install nsis -y --no-progress
-          "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+      - name: Build payload
+        run: node scripts/build-app.mjs
 
-      - name: Package
-        run: pnpm tools-pack win build --to nsis
+      - name: Generate icons
+        run: npx --yes @tauri-apps/cli@2 icon apps/web/public/app-icon.png
+        working-directory: src-tauri
+        env:
+          TAURI_CONFIG: "{}"
 
-      - name: Size report
-        shell: bash
-        continue-on-error: true
-        run: |
-          U=$(find .tmp/tools-pack/out/win -type d -name win-unpacked | head -1)
-          echo "unpacked: $U"; du -sm "$U"
-          du -m --max-depth=4 "$U/resources" | sort -rn | head -40
-
-      - name: Collect artifacts
-        shell: bash
-        run: |
-          mkdir -p out
-          SETUP=$(find .tmp/tools-pack/out/win -maxdepth 4 -name "*setup*.exe" -not -path "*win-unpacked*" | head -1)
-          cp "$SETUP" out/OpenDesign-setup.exe
-          ls -lh out
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: opendesigns-windows
-          path: out/*
-          if-no-files-found: error
-
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Build installer and publish release
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ env.TAG }}
-          name: "OpenDesign ${{ env.TAG }}"
-          body: |
-            Automated Windows build of **OpenDesign** (Standalone Local Workspace with Built-in Zeus Engine & 41 Free Keyless Providers).
-
-            - `OpenDesign-setup.exe` — Windows x64 installer with auto-update support
-          draft: false
+          tauriScript: npx --yes @tauri-apps/cli@2
+          projectPath: .
+          tagName: ${{ env.TAG }}
+          releaseName: "OpenDesign ${{ env.TAG }}"
+          releaseBody: "Windows x64 installer. Installed copies update themselves from this release."
+          releaseDraft: false
           prerelease: false
-          files: out/*
+
+      - name: Report installer size
+        if: always()
+        shell: bash
+        continue-on-error: true
+        run: |
+          find src-tauri/target -name "*setup.exe" -exec ls -l {} \;
+          du -sm .stage/app .stage/node

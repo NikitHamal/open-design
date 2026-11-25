@@ -2,23 +2,10 @@
 
 import dynamic from 'next/dynamic';
 
-import { installErrorHandlers } from '../../src/analytics/error-tracking';
 import { MatrixLoader } from '../../src/components/MatrixLoader';
-import { installWebObservability } from '../../src/observability/install';
+import { AppUpdatePrompt } from '../../src/components/AppUpdatePrompt';
 import { installChatScrollExperiments } from '../../src/runtime/chat-scroll-experiments';
 import { installChatScrollTakeover } from '../../src/runtime/chat-scroll-takeover';
-
-// Install browser exception handlers at module-load time, before any other
-// client code can throw. The hooks buffer events until AnalyticsProvider
-// finishes `bootstrapExceptionTracking()` with the PostHog key, so even
-// errors thrown during the dynamic import of `src/App` are captured.
-installErrorHandlers();
-
-// Install the rest of the observability surface (long tasks, white-screen
-// detector, resource-error capture, boot timing, visibility tracking).
-// Same buffer + consent-bypass transport as the exception handler above
-// so events fired before AnalyticsProvider initialises still flush.
-installWebObservability();
 
 // The consumer of the scroll-freeze probe's verdict that acts on it: when the
 // chat log's compositor-side scroll extent goes stale, kick the compositor for
@@ -50,11 +37,15 @@ const App = dynamic(() => import('../../src/App').then((m) => m.App), {
   loading: () => (
     <div className="od-loading-shell">
       <MatrixLoader />
-      <span>Loading OpenDesign…</span>
     </div>
   ),
 });
 
 export function ClientApp() {
-  return <App />;
+  return (
+    <>
+      <App />
+      <AppUpdatePrompt />
+    </>
+  );
 }

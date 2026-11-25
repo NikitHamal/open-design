@@ -32,8 +32,6 @@ const localDevelopment = Object.freeze({
     "packages/diagnostics",
     "packages/dsh-runtime",
     "apps/daemon",
-    "tools/dev",
-    "tools/pack",
   ]),
 });
 const buildTargets = localDevelopment.targets;

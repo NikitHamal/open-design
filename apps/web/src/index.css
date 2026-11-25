@@ -76,3 +76,10 @@
 .zpick-row--effort { gap: 10px; }
 .zpick-empty { padding: 28px 12px; text-align: center; color: var(--text-soft); font-size: 13px; }
 .zpick-foot { display: flex; align-items: center; height: 44px; flex: none; padding: 0 8px; border-top: 1px solid var(--border-soft); }
+
+.od-update { position: fixed; right: 16px; bottom: 16px; z-index: 2000; display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 16px; border: 1px solid var(--border-strong, #bdbdbd); border-radius: 20px; background: var(--bg-elevated, #fafafa); color: var(--text-strong, #202020); font-size: 13px; box-shadow: none; }
+.od-update__text { margin-right: 4px; }
+.od-update__btn { height: 32px; padding: 0 14px; border: 0; border-radius: 16px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.od-update__btn:hover { background: var(--bg-fill-secondary, rgba(0,0,0,.06)); }
+.od-update__btn--primary { background: var(--text-strong, #202020); color: var(--bg, #fff); }
+.od-update__btn--primary:hover { background: var(--text-strong, #202020); opacity: .88; }

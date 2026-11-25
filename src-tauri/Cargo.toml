@@ -12,7 +12,7 @@ crate-type = ["rlib", "cdylib", "staticlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", default-features = false, features = ["wry", "compression"] }
+tauri = { version = "2", features = [] }
 tauri-plugin-single-instance = "2"
 
 [profile.release]

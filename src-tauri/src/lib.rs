@@ -92,6 +92,7 @@ fn spawn_daemon(res: &Path, data: &Path, port: u16) -> std::io::Result<Child> {
         .env("OD_DAEMON_CLI_PATH", &cli)
         .env("OD_NODE_BIN", &node)
         .env("OD_NO_TELEMETRY", "1")
+        .env("OD_APP_VERSION", env!("CARGO_PKG_VERSION"))
         .env("NODE_ENV", "production")
         .env("NODE_OPTIONS", "--max-old-space-size=384")
         .env_remove("ELECTRON_RUN_AS_NODE")
@@ -188,14 +189,13 @@ pub fn run() {
             let _ = std::fs::create_dir_all(&data);
             let port = pick_port();
 
-            let window = WebviewWindowBuilder::new(&handle, "main", WebviewUrl::App("index.html".into()))
+            let builder = WebviewWindowBuilder::new(&handle, "main", WebviewUrl::App("index.html".into()))
                 .title("OpenDesign")
                 .inner_size(1360.0, 860.0)
                 .min_inner_size(960.0, 640.0)
                 .maximized(true)
                 .center()
                 .background_color(tauri::window::Color(20, 18, 24, 255))
-                .additional_browser_args(BROWSER_ARGS)
                 .initialization_script(LINK_GUARD)
                 .on_navigation(|url| match url.scheme() {
                     "http" | "https" => {
@@ -206,8 +206,12 @@ pub fn run() {
                         local
                     }
                     _ => true,
-                })
-                .build()?;
+                });
+            #[cfg(windows)]
+            let builder = builder.additional_browser_args(BROWSER_ARGS);
+            #[cfg(not(windows))]
+            let _ = BROWSER_ARGS;
+            let window = builder.build()?;
 
             let child = spawn_daemon(&res, &data, port)?;
             *state.child.lock().unwrap() = Some(child);

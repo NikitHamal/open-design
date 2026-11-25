@@ -22,6 +22,7 @@ import type {
   DesktopRenderSlidesResult,
 } from '@open-design/sidecar-proto';
 import express from 'express';
+import { registerAppUpdateRoutes } from './app-update.js';
 import multer from 'multer';
 import JSZip from 'jszip';
 import { execFile } from 'node:child_process';
@@ -8775,6 +8776,8 @@ export async function startServer({
     BUNDLED_PETS_DIR,
     OD_BIN,
   };
+
+  registerAppUpdateRoutes(app);
 
   app.get('/api/health', async (_req, res) => {
     const versionInfo = await readCurrentAppVersionInfo();

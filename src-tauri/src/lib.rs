@@ -134,6 +134,32 @@ fn open_external(url: &str) {
     }
 }
 
+// The daemon downloads and verifies the installer, then exits with this code. The shell owns
+// the process tree, so it launches the installer (detached from the daemon) and quits.
+const UPDATE_EXIT_CODE: i32 = 42;
+
+fn launch_installer(data: &Path) -> Result<(), String> {
+    let marker = data.join("updates").join("pending.json");
+    let raw = std::fs::read_to_string(&marker).map_err(|e| format!("no pending update ({e})"))?;
+    let _ = std::fs::remove_file(&marker);
+    let installer = PathBuf::from(raw.trim());
+    if !installer.is_file() {
+        return Err(format!("{} is missing", installer.display()));
+    }
+    let mut cmd = Command::new(&installer);
+    cmd.args(["/P", "/R", "/UPDATE"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+        cmd.creation_flags(0x0000_0008 | 0x0000_0200);
+    }
+    cmd.spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
 fn supervise(app: AppHandle, res: PathBuf, data: PathBuf, port: u16) {
     let state = app.state::<Arc<DaemonState>>().inner().clone();
     let mut restarts = 0u32;
@@ -151,6 +177,29 @@ fn supervise(app: AppHandle, res: PathBuf, data: PathBuf, port: u16) {
         if let Some(status) = exited {
             if state.stopping.load(Ordering::SeqCst) {
                 return;
+            }
+            if status.code() == Some(UPDATE_EXIT_CODE) {
+                match launch_installer(&data) {
+                    Ok(()) => {
+                        state.stopping.store(true, Ordering::SeqCst);
+                        thread::sleep(Duration::from_millis(400));
+                        app.exit(0);
+                        return;
+                    }
+                    Err(msg) => {
+                        let dir = data.join("updates");
+                        let _ = std::fs::create_dir_all(&dir);
+                        let _ = std::fs::write(dir.join("last-error.txt"), format!("Installer did not start: {msg}"));
+                        match spawn_daemon(&res, &data, port) {
+                            Ok(c) => *state.child.lock().unwrap() = Some(c),
+                            Err(_) => {
+                                app.exit(1);
+                                return;
+                            }
+                        }
+                        continue;
+                    }
+                }
             }
             if status.success() || restarts >= 5 {
                 app.exit(0);

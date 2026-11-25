@@ -10,7 +10,12 @@ type CheckResult = {
   installerName?: string | null;
 };
 
-type Status = { state: 'idle' | 'downloading' | 'launching' | 'error'; done: number; total: number };
+type Status = {
+  state: 'idle' | 'downloading' | 'verifying' | 'launching' | 'error';
+  done: number;
+  total: number;
+  error?: string;
+};
 
 const RECHECK_MS = 6 * 60 * 60 * 1000;
 
@@ -46,7 +51,7 @@ export function AppUpdatePrompt() {
 
   if (!update || dismissed) return null;
 
-  const busy = status.state === 'downloading' || status.state === 'launching';
+  const busy = status.state === 'downloading' || status.state === 'verifying' || status.state === 'launching';
   const percent = status.total > 0 ? Math.min(100, Math.round((status.done / status.total) * 100)) : null;
 
   const install = async () => {
@@ -56,10 +61,16 @@ export function AppUpdatePrompt() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: update.installerUrl, name: update.installerName }),
     }).catch(() => undefined);
+    if (timer.current) window.clearInterval(timer.current);
     timer.current = window.setInterval(async () => {
       try {
         const res = await fetch('/api/app-update/status');
-        setStatus((await res.json()) as Status);
+        const next = (await res.json()) as Status;
+        setStatus(next);
+        if (next.state === 'error' && timer.current) {
+          window.clearInterval(timer.current);
+          timer.current = null;
+        }
       } catch {
         /* daemon exits while the installer takes over */
       }
@@ -69,8 +80,14 @@ export function AppUpdatePrompt() {
   return (
     <div className="od-update" role="status">
       <span className="od-update__text">
-        {status.state === 'error' ? 'Update failed' : `Update ${update.latest ?? ''}`}
-        {busy && percent !== null ? ` · ${percent}%` : ''}
+        {status.state === 'error'
+          ? `Update failed${status.error ? `: ${status.error}` : ''}`
+          : status.state === 'launching'
+            ? 'Restarting to install'
+            : status.state === 'verifying'
+              ? 'Verifying download'
+              : `Update ${update.latest ?? ''}`}
+        {status.state === 'downloading' && percent !== null ? ` · ${percent}%` : ''}
       </span>
       {busy ? null : (
         <button type="button" className="od-update__btn od-update__btn--primary" onClick={install}>

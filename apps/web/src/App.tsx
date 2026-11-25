@@ -958,7 +958,7 @@ export function App() {
     <MotionConfig reducedMotion="user">
       <IframeKeepAliveProvider>
         <WorkspaceMemberDirectoryPreloader />
-        
+        <AppInner />
       </IframeKeepAliveProvider>
     </MotionConfig>
   );

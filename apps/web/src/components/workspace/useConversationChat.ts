@@ -231,7 +231,7 @@ export function useConversationChat(
         id: assistantId,
         role: 'assistant',
         content: '',
-        agentId: cfg.agentId,
+        agentId: (cfg.agentId ?? 'zeus'),
         agentName: assistantAgentName,
         events: [],
         createdAt: startedAt,
@@ -351,7 +351,7 @@ export function useConversationChat(
 
       const submissionId = randomUUID();
       void streamViaDaemon({
-        agentId: cfg.agentId,
+        agentId: (cfg.agentId ?? 'zeus'),
         history,
         signal: controller.signal,
         cancelSignal: cancelController.signal,

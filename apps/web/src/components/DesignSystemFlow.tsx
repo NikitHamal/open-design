@@ -2442,14 +2442,14 @@ export function DesignSystemDetailView({
         attachments: attachments.length > 0 ? attachments : undefined,
         commentAttachments: commentAttachments.length > 0 ? commentAttachments : undefined,
       };
-      const selectedAgent = agents.find((agent) => agent.id === config.agentId);
-      const selectedModel = config.agentModels?.[config.agentId];
+      const selectedAgent = agents.find((agent) => agent.id === (config.agentId ?? 'zeus'));
+      const selectedModel = config.agentModels?.[(config.agentId ?? 'zeus')];
       const assistantMsg: ChatMessage = {
         id: randomUUID(),
         role: 'assistant',
         content: '',
-        agentId: config.agentId,
-        agentName: [selectedAgent?.name ?? config.agentId, selectedModel?.model].filter(Boolean).join(' · '),
+        agentId: (config.agentId ?? 'zeus'),
+        agentName: [selectedAgent?.name ?? (config.agentId ?? 'zeus'), selectedModel?.model].filter(Boolean).join(' · '),
         events: [],
         createdAt: startedAt,
         startedAt,
@@ -2509,7 +2509,7 @@ export function DesignSystemDetailView({
         Boolean(peekOnboardingSessionId())
         || sessionStorage.getItem(`od:auto-send-first:${projectId}`) === '1';
       void streamViaDaemon({
-        agentId: config.agentId,
+        agentId: (config.agentId ?? 'zeus'),
         history: agentHistory,
         signal: controller.signal,
         cancelSignal: cancelController.signal,

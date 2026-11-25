@@ -33,7 +33,7 @@ const WIN_NSIS_OVERLAY_RELATIVE_PATHS = [
   "resources/open-design-config.json",
 ] as const;
 
-export const WIN_PAYLOAD_SEVEN_Z_CREATE_ARGS = ["-t7z", "-m0=LZMA2", "-mx=1", "-mf=off"] as const;
+export const WIN_PAYLOAD_SEVEN_Z_CREATE_ARGS = ["-t7z", "-m0=LZMA2:d=64m:fb=64", "-mx=9", "-ms=on"] as const;
 const WIN_NSIS_PAYLOAD_SEVEN_Z_TIMEOUT_MS = 15 * 60_000;
 
 function escapeNsisString(value: string): string {

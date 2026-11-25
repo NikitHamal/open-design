@@ -71,9 +71,9 @@ import type {
 } from "./types.js";
 
 const execFileAsync = promisify(execFile);
-const WIN_ARCHIVE_CACHE_VERSION = 4;
-const WIN_ELECTRON_BUILDER_DIR_CACHE_VERSION = 9;
-const WIN_NSIS_BASE_PAYLOAD_INPUT_HASH_CACHE_VERSION = 2;
+const WIN_ARCHIVE_CACHE_VERSION = 5;
+const WIN_ELECTRON_BUILDER_DIR_CACHE_VERSION = 10;
+const WIN_NSIS_BASE_PAYLOAD_INPUT_HASH_CACHE_VERSION = 3;
 
 async function hashWinNsisInstallerImplementation(config: ToolPackConfig): Promise<string> {
   const sourceModulePath = join(config.workspaceRoot, "tools", "pack", "src", "win", "custom-installer.ts");

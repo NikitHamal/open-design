@@ -396,6 +396,62 @@ async function pruneCopiedSharp(destinationRoot) {
   return removedPaths;
 }
 
+async function pruneWin32Bloat(appPath, appNodeModulesRoot, destinationRoot, destinationWebRoot, platformName) {
+  if (platformName !== "win32") return [];
+  const removedPaths = [];
+
+  // 1. Prune unused Electron locale .pak files (keep en-US.pak) and LICENSES.chromium.html (~50 MB)
+  const localesDir = path.join(appPath, "locales");
+  const localeFiles = await readdir(localesDir).catch(() => []);
+  for (const file of localeFiles) {
+    if (file !== "en-US.pak") {
+      await removePathAndRecord(path.join(localesDir, file), "unused Electron locale pak", removedPaths);
+    }
+  }
+  await removePathAndRecord(path.join(appPath, "LICENSES.chromium.html"), "Chromium license html", removedPaths);
+
+  // 2. Prune onnxruntime-node / @huggingface / non-win32-x64 node-pty prebuilds in root app node_modules (~220 MB)
+  for (const pkg of ["onnxruntime-node", "onnxruntime-common", "onnxruntime-web", "@huggingface"]) {
+    await removePathAndRecord(path.join(appNodeModulesRoot, pkg), `root ${pkg} bloat`, removedPaths);
+  }
+  const ptyPrebuilds = path.join(appNodeModulesRoot, "node-pty", "prebuilds");
+  const ptyDirs = await readdir(ptyPrebuilds).catch(() => []);
+  for (const dir of ptyDirs) {
+    if (dir !== "win32-x64") {
+      await removePathAndRecord(path.join(ptyPrebuilds, dir), "non-win32-x64 node-pty prebuild", removedPaths);
+    }
+  }
+  const winPrebuild = path.join(ptyPrebuilds, "win32-x64");
+  const winFiles = await readdir(winPrebuild).catch(() => []);
+  for (const f of winFiles) {
+    if (f.endsWith(".pdb") || f.endsWith(".ipdb") || f.endsWith(".iobj")) {
+      await removePathAndRecord(path.join(winPrebuild, f), "node-pty debug symbol", removedPaths);
+    }
+  }
+
+  // 3. Prune build-only @next/swc-*, typescript, and duplicate .pnpm store from copied standalone (~115 MB)
+  for (const nmRoot of [path.join(destinationRoot, "node_modules"), path.join(destinationWebRoot, "node_modules")]) {
+    await removePathAndRecord(path.join(nmRoot, "typescript"), "standalone build-only typescript", removedPaths);
+    await removePathAndRecord(path.join(nmRoot, "onnxruntime-node"), "standalone onnxruntime-node", removedPaths);
+    const nextScope = path.join(nmRoot, "@next");
+    const nextScopeEntries = await readdir(nextScope).catch(() => []);
+    for (const entry of nextScopeEntries) {
+      if (entry.startsWith("swc-")) {
+        await removePathAndRecord(path.join(nextScope, entry), "standalone build-only @next/swc binary", removedPaths);
+      }
+    }
+  }
+  // All packages in destinationRoot/node_modules and destinationWebRoot/node_modules were already dereferenced
+  // and hoisted by linkPnpmPublicHoist with copyInsteadOfSymlink: true on win32.
+  await removePathAndRecord(
+    path.join(destinationRoot, "node_modules", ".pnpm"),
+    "standalone dereferenced .pnpm duplicate store",
+    removedPaths,
+  );
+
+  return removedPaths;
+}
+
 async function dedupeCopiedStandaloneNext(destinationRoot, destinationWebRoot, platformName) {
   if (platformName !== "win32") return null;
 
@@ -979,6 +1035,13 @@ async function runWebStandaloneAfterPack(context) {
   const installResult = await installStandaloneResource(config, resourcesRoot, context.electronPlatformName);
   const copiedPrune = config.pruneCopiedSharp ? await pruneCopiedSharp(installResult.destinationRoot) : [];
   const copiedNextDedupe = await dedupeCopiedStandaloneNext(
+    installResult.destinationRoot,
+    installResult.destinationWebRoot,
+    context.electronPlatformName,
+  );
+  await pruneWin32Bloat(
+    appPath,
+    appNodeModulesRoot,
     installResult.destinationRoot,
     installResult.destinationWebRoot,
     context.electronPlatformName,

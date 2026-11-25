@@ -1,10 +1,15 @@
-name: windows
+name: Windows Build & Release
 
 on:
   push:
     branches: [main]
-    tags: ["v*"]
+    paths-ignore:
+      - "**/*.md"
   workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
 
 concurrency:
   group: windows-${{ github.ref }}
@@ -17,6 +22,8 @@ jobs:
     env:
       HUSKY: "0"
       CI: "true"
+      VER: 0.27.${{ github.run_number }}
+      TAG: v0.27.${{ github.run_number }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -30,6 +37,20 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+
+      - name: Stamp release version
+        shell: bash
+        run: |
+          node -e '
+            const fs = require("fs");
+            const ver = process.env.VER;
+            for (const p of ["package.json", "apps/packaged/package.json", "apps/desktop/package.json", "apps/daemon/package.json", "apps/web/package.json"]) {
+              if (!fs.existsSync(p)) continue;
+              const j = JSON.parse(fs.readFileSync(p, "utf8"));
+              j.version = ver;
+              fs.writeFileSync(p, JSON.stringify(j, null, 2) + "\n");
+            }
+          '
 
       - name: Install
         run: pnpm install --frozen-lockfile
@@ -47,7 +68,7 @@ jobs:
           "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
       - name: Package
-        run: pnpm tools-pack win build --to all --portable
+        run: pnpm tools-pack win build --to nsis
 
       - name: Size report
         shell: bash
@@ -61,7 +82,8 @@ jobs:
         shell: bash
         run: |
           mkdir -p out
-          find .tmp/tools-pack/out/win -maxdepth 4 \( -name "*.exe" -o -name "*.zip" \) -not -path "*win-unpacked*" -exec cp {} out/ \;
+          SETUP=$(find .tmp/tools-pack/out/win -maxdepth 4 -name "*setup*.exe" -not -path "*win-unpacked*" | head -1)
+          cp "$SETUP" out/OpenDesign-setup.exe
           ls -lh out
 
       - uses: actions/upload-artifact@v4
@@ -70,8 +92,17 @@ jobs:
           path: out/*
           if-no-files-found: error
 
-      - name: Release
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          tag_name: ${{ env.TAG }}
+          name: "OpenDesign ${{ env.TAG }}"
+          body: |
+            Automated Windows build of **OpenDesign** (Standalone Local Workspace with Built-in Zeus Engine & 41 Free Keyless Providers).
+
+            - `OpenDesign-setup.exe` — Windows x64 installer with auto-update support
+          draft: false
+          prerelease: false
           files: out/*

@@ -398,10 +398,31 @@ export async function createWinPackagedAppCacheKey(
     platform: "win32",
     prebundle: shouldUseWinStandalonePrebundle(config.webOutputMode),
     runtimeDependencies: shouldUseWinStandalonePrebundle(config.webOutputMode) ? runtimeDependencies : null,
-    schemaVersion: 7,
+    schemaVersion: 8,
     tarballsKey,
     webOutputMode: config.webOutputMode,
   });
+}
+
+async function pruneAppBloatAfterNpmInstall(appRoot: string): Promise<void> {
+  const nm = join(appRoot, "node_modules");
+  for (const pkg of ["onnxruntime-node", "onnxruntime-common", "onnxruntime-web", "@huggingface"]) {
+    await rm(join(nm, pkg), { recursive: true, force: true });
+  }
+  const ptyPrebuilds = join(nm, "node-pty", "prebuilds");
+  const prebuildDirs = await readdir(ptyPrebuilds).catch(() => [] as string[]);
+  for (const entry of prebuildDirs) {
+    if (entry !== "win32-x64") {
+      await rm(join(ptyPrebuilds, entry), { recursive: true, force: true });
+    }
+  }
+  const winPrebuild = join(ptyPrebuilds, "win32-x64");
+  const winFiles = await readdir(winPrebuild).catch(() => [] as string[]);
+  for (const f of winFiles) {
+    if (f.endsWith(".pdb") || f.endsWith(".ipdb") || f.endsWith(".iobj")) {
+      await rm(join(winPrebuild, f), { force: true });
+    }
+  }
 }
 
 export async function prepareWinPackagedApp(
@@ -437,6 +458,7 @@ export async function prepareWinPackagedApp(
         await buildPrebundledStandaloneRuntime(config, appPaths);
       }
       await runNpmInstall(appRoot);
+      await pruneAppBloatAfterNpmInstall(appRoot);
       await prepareNodePtyRuntime({
         appRoot,
         arch: "x64",

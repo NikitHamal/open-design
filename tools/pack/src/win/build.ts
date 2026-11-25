@@ -65,7 +65,8 @@ export async function packWin(config: ToolPackConfig): Promise<WinPackResult> {
   const segments: WinPackTiming[] = [];
   const hasNsisTarget = shouldBuildWinNsisInstaller(config.to);
   const hasZipTarget = shouldBuildWinPortableZip(config.to);
-  const hasLauncherPayloadTarget = hasNsisTarget || hasZipTarget;
+  const hasLauncherPayloadTarget =
+    process.env.OD_BUILD_LAUNCHER_PAYLOAD === "1" && (hasNsisTarget || hasZipTarget);
   const runPhase = async <T>(phase: string, task: () => Promise<T>): Promise<T> => {
     const startedAt = Date.now();
     logWinBuildProgress("phase:start", { phase });

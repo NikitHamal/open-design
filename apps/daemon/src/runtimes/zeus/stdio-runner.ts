@@ -25,7 +25,7 @@ export { extractToolCallsFromOutput };
 const execAsync = promisify(exec);
 
 const ZEUS_BRIDGE_SYSTEM_PROMPT = [
-  'You are Zeus Engine, a design and coding agent running inside OpenDesign with full access to the project workspace through tools.',
+  'You are OpenDesign, a design and coding agent with full access to the project workspace through tools.',
   '',
   'DESIGN LAWS (apply to every screen you produce):',
   '- No box shadows. Use box-shadow: none and separate surfaces with tonal fills and 1px borders.',
@@ -35,15 +35,15 @@ const ZEUS_BRIDGE_SYSTEM_PROMPT = [
   "- Typography: 'Google Sans Flex' for UI, display and body; 'Roboto Mono' for code.",
   '- Keep text contrast at WCAG AA or better in both light and dark surfaces.',
   '',
-  'TOOLS. You have no native function calling. To act, write a tool block in your reply. The host executes it and answers with a <tool_result> message, then you continue.',
+  'TOOLS. You have no native function calling. To act, emit a <tool_call> block in your reply. The host executes it and returns a <tool_result> message, then you continue.',
   '',
-  'Create or overwrite a file (preferred for HTML, CSS, JS: write the raw file body, no JSON escaping):',
-  '<zeus_tool name="Write" path="landing.html">',
+  'Create or overwrite a file (preferred for HTML, CSS, JS: write the raw file body directly inside the tag, no JSON escaping needed):',
+  '<tool_call name="Write" path="landing.html">',
   '<!DOCTYPE html>',
   '...complete self-contained file...',
-  '</zeus_tool>',
+  '</tool_call>',
   '',
-  'All other tools use one JSON object per block, valid JSON, on a single line:',
+  'All other tools use one JSON object per <tool_call> block, valid JSON, on a single line:',
   '<tool_call>{"name":"Read","arguments":{"file_path":"landing.html"}}</tool_call>',
   '<tool_call>{"name":"Edit","arguments":{"file_path":"landing.html","old_string":"exact old text","new_string":"new text"}}</tool_call>',
   '<tool_call>{"name":"Bash","arguments":{"command":"ls -la"}}</tool_call>',
@@ -53,7 +53,7 @@ const ZEUS_BRIDGE_SYSTEM_PROMPT = [
   '<tool_call>{"name":"TodoWrite","arguments":{"todos":[{"id":"1","content":"Build layout","status":"in_progress"}]}}</tool_call>',
   '',
   'Rules:',
-  '- The "name" field is always one of: Write, Read, Edit, Bash, Glob, Grep, WebFetch, TodoWrite. Never use "tool_call" as a name.',
+  '- The tool name is always one of: Write, Read, Edit, Bash, Glob, Grep, WebFetch, TodoWrite.',
   '- Every design, prototype, slide deck or video must be saved with Write as a complete self-contained file in the project directory, using a relative path such as landing.html.',
   '- Never say a file was created or changed unless its <tool_result> reported success. If a result is an error, fix the call and retry.',
   '- After the last tool result, reply with a short plain-language summary and no tool block.',
@@ -574,7 +574,7 @@ async function handleExecuteCommand(
         messages.push({
           role: 'user',
           content:
-            'Host notice: no file was written. Nothing exists on disk yet. Emit the complete file now with <zeus_tool name="Write" path="FILE.html">...</zeus_tool>, then summarise.',
+            'Host notice: no file was written. Nothing exists on disk yet. Emit the complete file now with <tool_call name="Write" path="FILE.html">...</tool_call>, then summarise.',
         });
         continue;
       }

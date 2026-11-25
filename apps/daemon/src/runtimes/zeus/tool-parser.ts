@@ -53,7 +53,20 @@ const ALIASES: Record<string, string> = {
   fetchurl: 'WebFetch',
 };
 
-const WRAPPER_NAMES = new Set(['toolcall', 'tool', 'function', 'call', 'tooluse', 'functioncall', 'action', 'invoke']);
+const WRAPPER_NAMES = new Set([
+  'toolcall',
+  'tool',
+  'function',
+  'call',
+  'tooluse',
+  'functioncall',
+  'action',
+  'invoke',
+  'zeustool',
+  'odtool',
+  'opendesigntool',
+  'xmltool',
+]);
 
 function squash(raw: string): string {
   return raw.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -61,6 +74,53 @@ function squash(raw: string): string {
 
 export function normalizeToolName(raw: string): string {
   return ALIASES[squash(raw)] ?? raw.trim();
+}
+
+/** Infer the intended tool from arguments when a model uses a wrapper tag name as the tool name. */
+function inferToolFromArgs(args: Record<string, unknown>): ParsedToolCall | null {
+  if (Array.isArray(args.todos) || Array.isArray(args.plan) || Array.isArray(args.items)) {
+    return { name: 'TodoWrite', arguments: { todos: args.todos ?? args.plan ?? args.items } };
+  }
+  const filePath = args.file_path ?? args.path ?? args.file ?? args.filename ?? args.target;
+  if (typeof args.old_string === 'string' || typeof args.search === 'string') {
+    return {
+      name: 'Edit',
+      arguments: {
+        file_path: typeof filePath === 'string' && filePath ? filePath : 'index.html',
+        old_string: String(args.old_string ?? args.search ?? ''),
+        new_string: String(args.new_string ?? args.replace ?? args.content ?? ''),
+      },
+    };
+  }
+  if (typeof args.content === 'string' && args.content.trim().length > 0) {
+    return {
+      name: 'Write',
+      arguments: {
+        file_path: typeof filePath === 'string' && filePath ? filePath : 'index.html',
+        content: args.content,
+      },
+    };
+  }
+  if (typeof args.command === 'string' || typeof args.cmd === 'string') {
+    return {
+      name: 'Bash',
+      arguments: { command: String(args.command ?? args.cmd ?? '') },
+    };
+  }
+  if (typeof args.url === 'string' && /^https?:\/\//i.test(args.url)) {
+    return { name: 'WebFetch', arguments: { url: args.url } };
+  }
+  if (typeof args.pattern === 'string' || typeof args.query === 'string') {
+    const pat = String(args.pattern ?? args.query ?? '');
+    if (pat.includes('*') && !args.query) {
+      return { name: 'Glob', arguments: { pattern: pat } };
+    }
+    return { name: 'Grep', arguments: { pattern: pat, path: String(args.path ?? '.') } };
+  }
+  if (typeof filePath === 'string' && filePath.trim().length > 0) {
+    return { name: 'Read', arguments: { file_path: filePath.trim() } };
+  }
+  return null;
 }
 
 export function isKnownTool(name: string): boolean {
@@ -179,13 +239,19 @@ export function callsFromValue(value: unknown, depth = 0): ParsedToolCall[] {
     const nested = callsFromValue(args, depth + 1);
     if (nested.length > 0) return nested;
     const innerName = args.name ?? args.tool ?? args.tool_name;
-    if (typeof innerName === 'string' && innerName) {
+    if (typeof innerName === 'string' && innerName && !WRAPPER_NAMES.has(squash(innerName))) {
       const rest = toRecord(args.arguments ?? args.input ?? args.parameters ?? args.params ?? args.args);
       return [{ name: normalizeToolName(innerName), arguments: Object.keys(rest).length ? rest : args }];
     }
-    return [];
+    const inferred = inferToolFromArgs(args);
+    return inferred ? [inferred] : [];
   }
-  return [{ name: normalizeToolName(rawName), arguments: args }];
+  const normalized = normalizeToolName(rawName);
+  if (!isKnownTool(normalized)) {
+    const inferred = inferToolFromArgs(args);
+    if (inferred) return [inferred];
+  }
+  return [{ name: normalized, arguments: args }];
 }
 
 function parseAttributes(attrText: string): Record<string, string> {
@@ -197,14 +263,20 @@ function parseAttributes(attrText: string): Record<string, string> {
 }
 
 function callFromTagBody(attrs: Record<string, string>, bodyRaw: string, defaultName = ''): ParsedToolCall[] {
-  const rawName = attrs.name ?? attrs.tool ?? defaultName;
+  const candidateName = attrs.name ?? attrs.tool ?? defaultName;
+  const rawName = WRAPPER_NAMES.has(squash(candidateName)) ? defaultName : candidateName;
   const body = bodyRaw.replace(/^\r?\n/, '').replace(/\r?\n$/, '');
+  const filePath = attrs.path ?? attrs.file_path ?? attrs.file ?? attrs.filename;
   if (!rawName) {
     const parsed = parseLooseJson(body);
-    return parsed === undefined ? [] : callsFromValue(parsed);
+    if (parsed !== undefined) {
+      const calls = callsFromValue(parsed);
+      if (calls.length > 0) return calls;
+    }
+    const inferred = inferToolFromArgs({ ...attrs, ...(body.trim() ? { content: body } : {}) });
+    return inferred ? [inferred] : [];
   }
   const name = normalizeToolName(rawName);
-  const filePath = attrs.path ?? attrs.file_path ?? attrs.file ?? attrs.filename;
   switch (name) {
     case 'Write':
       return [{ name, arguments: { file_path: filePath ?? 'index.html', content: body || attrs.content || '' } }];

@@ -63,8 +63,8 @@ export function resolveZeusStdioRunnerPath(): string {
 
 export const zeusAgentDef = {
   id: 'zeus',
-  name: 'Zeus Engine',
-  bin: 'zeus-engine',
+  name: 'OpenDesign',
+  bin: 'open-design-engine',
   versionArgs: ['--version'],
   env: {
     ELECTRON_RUN_AS_NODE: '1',
